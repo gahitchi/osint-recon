@@ -12,6 +12,11 @@ class Verdict(str, enum.Enum):
     FOUND = "FOUND"
     NOT_FOUND = "NOT_FOUND"
     UNCERTAIN = "UNCERTAIN"
+    # The response was a bot-wall / WAF challenge / JS-gate / rate-limit, so the
+    # account's existence genuinely could not be determined. Reporting this
+    # honestly prevents both false positives (challenge page that returns 200)
+    # and false negatives (a block mistaken for "not found").
+    UNVERIFIABLE = "UNVERIFIABLE"
     ERROR = "ERROR"  # request failed / could not be evaluated
 
 
@@ -25,15 +30,15 @@ class Query(BaseModel):
     name: Optional[str] = None
 
     def normalized(self) -> "Query":
-        def n(s: Optional[str]) -> Optional[str]:
-            return s.strip() if isinstance(s, str) and s.strip() else None
+        # Single normalization layer so collectors + correlation agree on values.
+        from .normalize import norm_domain, norm_email, norm_text, norm_username
 
         return Query(
-            username=n(self.username),
-            email=n(self.email).lower() if n(self.email) else None,
-            phone=n(self.phone),
-            domain=n(self.domain).lower() if n(self.domain) else None,
-            name=n(self.name),
+            username=norm_username(self.username),
+            email=norm_email(self.email),
+            phone=norm_text(self.phone),
+            domain=norm_domain(self.domain),
+            name=norm_text(self.name),
         )
 
     def is_empty(self) -> bool:
@@ -72,6 +77,9 @@ class Evidence(BaseModel):
     contains_query: bool = False
     elapsed_ms: int = 0
     error: Optional[str] = None
+    # Non-None when the response was a bot-wall / WAF / JS-gate / rate-limit;
+    # holds the human reason (e.g. "Cloudflare challenge"). Drives UNVERIFIABLE.
+    blocked: Optional[str] = None
 
 
 class Finding(BaseModel):
@@ -90,4 +98,11 @@ class Finding(BaseModel):
 
     @property
     def is_hit(self) -> bool:
+        """Confirmed presence — drives correlation, counting, and change diffs.
+        UNVERIFIABLE is deliberately excluded: it is not evidence of existence."""
         return self.verdict in (Verdict.FOUND, Verdict.UNCERTAIN)
+
+    @property
+    def is_notable(self) -> bool:
+        """Worth showing to the user (a hit, or an honest 'couldn't tell')."""
+        return self.verdict in (Verdict.FOUND, Verdict.UNCERTAIN, Verdict.UNVERIFIABLE)

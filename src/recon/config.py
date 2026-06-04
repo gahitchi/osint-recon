@@ -30,6 +30,11 @@ class Settings:
 
     # Random control-probe username: prefix + this many random chars.
     control_probe_len: int = 18
+    # Reproducibility: when true, the control-probe username is derived
+    # deterministically from probe_seed (+ site), so a given input yields the
+    # same baseline and thus the same verdicts across runs. (#8)
+    deterministic: bool = bool(__import__("os").environ.get("RECON_DETERMINISTIC"))
+    probe_seed: int = 1337
 
     # --- Collectors enabled by default (full automation) ---
     enabled_collectors: tuple[str, ...] = (

@@ -19,6 +19,7 @@ from .models import Finding, Query, Verdict
 
 _COLORS = {
     Verdict.FOUND: "\033[92m", Verdict.UNCERTAIN: "\033[93m",
+    Verdict.UNVERIFIABLE: "\033[95m",  # magenta — bot-wall/WAF/etc.
     Verdict.NOT_FOUND: "\033[90m", Verdict.ERROR: "\033[91m",
 }
 _RESET = "\033[0m"
@@ -56,7 +57,7 @@ async def _cmd_scan(args) -> int:
 
     findings = result["findings"]
     for f in findings:
-        if args.all or f.is_hit:
+        if args.all or f.is_notable:
             print(_line(f))
 
     summary = result["summary"]

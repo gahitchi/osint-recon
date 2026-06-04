@@ -30,6 +30,7 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "respx>=0.21"]
 
 [project.scripts]
 recon = "recon.cli:main"
+specter = "recon.launch:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

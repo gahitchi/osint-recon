@@ -10,6 +10,38 @@ change detection**, and a **pluggable scale-out** path.
 Inspired by [Specter](https://github.com/gahitchi/osint): deterministic (no LLM),
 local-only, SSE-streamed, with identity clustering and exportable reports.
 
+## What this is — and isn't
+
+OSINT automation does **not** produce a finished "target profile". This tool is a
+*discovery + verification + correlation* aid that is explicit about uncertainty:
+
+- It separates **discovery** (broad, noisy candidates) from **verification**
+  (strict, calibrated) and labels which phase produced each hit.
+- Every result is one of **FOUND / UNCERTAIN / UNVERIFIABLE / NOT_FOUND** with an
+  explainable `reasons[]` trail — **a bare `200 OK` never becomes a confident
+  FOUND**, and a bot-wall/CAPTCHA becomes **UNVERIFIABLE**, never a guess.
+- Correlation is **probabilistic**: ambiguous matches are surfaced for REVIEW, not
+  silently merged.
+
+It does not replace human analysis, and it cannot defeat platform anti-bot
+defenses — it reports honestly when it is blocked. **Authorized / educational use
+only.**
+
+## How it answers the common failure modes of recon wrappers
+
+| Common flaw | How osint-recon addresses it |
+|---|---|
+| **1. False sense of accuracy** (treats tool output as truth) | Multi-layer verify engine: control-probe baseline + site rule + content-similarity → FOUND/UNCERTAIN/NOT_FOUND; never "200 = found" (`verify/`) |
+| **2. No normalization** | One normalization layer for usernames/emails/domains/URLs/platforms, used by both queries and correlation (`normalize.py`) |
+| **3. No confidence scoring** | Per-finding confidence + per-source reliability + reliability-weighted entity confidence + **conflict resolution** picking canonical values by trust (`correlate/confidence.py`, `graph.py`) |
+| **4. Brittle scraping** | Per-site detection rules + **soft-404 baseline**; circuit breakers + result cache so site changes/outages degrade gracefully (`connectors/`) |
+| **5. No adversarial-defense handling** | Detects Cloudflare/Akamai/DataDome/PerimeterX/Imperva/CAPTCHA/JS-gate/rate-limit → **UNVERIFIABLE** instead of a false verdict (`verify/defenses.py`) |
+| **6. recon vs verification mixed** | Explicit **phase** label (`discovery` vs `verified`) on every hit |
+| **7. Hard dependency chains** | Pure-Python; shells out to **no** external CLI tools (no Sherlock/social-analyzer subprocesses), so nothing breaks on rolling distros |
+| **8. No reproducibility** | Deterministic seeded probe mode (`RECON_DETERMINISTIC=1`), pinned `requirements.lock`, and provenance (tool/dataset hash/dep versions/thresholds) stamped into every report (`provenance.py`) |
+| **9. Output not intelligence-ready** | Persistent identity graph: clustering, de-duplication, relationship edges, confidence (`correlate/`, `store/`) |
+| **10. "run this → full profile" misconception** | The framing above; honest UNVERIFIABLE/REVIEW states; disclaimers on every export |
+
 ## What's new in v0.2 (framework upgrade)
 
 | Capability | Where |
@@ -64,6 +96,21 @@ Every candidate URL passes a layered, **explainable** verdict pipeline. A site i
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"          # add ,pdf for PDF export: ".[dev,pdf]"
 ```
+
+### One-word launch: `specter`
+
+Install a terminal command that wakes the **whole stack** (dashboard server +
+background worker + monitoring scheduler) and opens the dashboard in a **Firefox**
+tab:
+
+```bash
+./scripts/install-specter.sh      # installs `specter` into ~/.local/bin
+specter                           # boots everything + opens Firefox
+```
+
+`specter` is idempotent: if the stack is already running it just opens the tab.
+Flags: `--no-browser` (headless), `--no-workers` (server only), `--port N`.
+Ctrl-C shuts the stack down cleanly.
 
 ## Use
 

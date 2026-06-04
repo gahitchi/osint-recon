@@ -61,6 +61,32 @@ def test_correlate_run_clusters_by_strong_signal():
     assert top["found"] >= 2
 
 
+def test_conflict_resolution_picks_canonical_by_reliability():
+    # Both observations share gravatar_hash AND email (so they merge), but assert
+    # different orcids. The higher-reliability source's orcid wins as canonical.
+    db = get_db()
+    with db.session() as s:
+        t = repo.get_or_create_target(s, Query(email="ada@x.com"))
+        r = repo.create_run(s, t)
+        repo.add_observation(s, r, Finding(
+            source="name:orcid", category="name", label="ORCID",
+            verdict=Verdict.FOUND, confidence=0.9,
+            signals={"gravatar_hash": "shared", "email": "ada@x.com", "orcid": "0000-1"}),
+            reliability=0.95)
+        repo.add_observation(s, r, Finding(
+            source="scraper:x", category="name", label="Scraper",
+            verdict=Verdict.FOUND, confidence=0.9,
+            signals={"gravatar_hash": "shared", "email": "ada@x.com", "orcid": "0000-2"}),
+            reliability=0.30)
+        repo.finish_run(s, r, "done", {})
+        rid2 = r.id
+
+    summary = correlate_run(db, rid2)
+    merged = [c for c in summary["clusters"] if "_canonical" in c["signals"]]
+    assert merged, "expected a single merged cluster with a resolved conflict"
+    assert merged[0]["signals"]["_canonical"]["orcid"] == "0000-1"
+
+
 def test_diff_detects_appeared_account():
     q = Query(username="alice")
     db, tid, r1 = _seed_run(q, [

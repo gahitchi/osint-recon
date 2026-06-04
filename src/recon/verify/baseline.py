@@ -15,13 +15,24 @@ from typing import Optional
 from ..config import SETTINGS
 from ..http_client import RateLimitedClient
 from ..models import Evidence, SiteRule
-from . import similarity
+from . import defenses, similarity
 
 
-def random_absent_account(length: int | None = None) -> str:
+def random_absent_account(length: int | None = None, key: str | None = None) -> str:
+    """A username extremely unlikely to belong to anyone (for baseline probing).
+
+    Deterministic mode derives it from probe_seed + `key` so baselines — and
+    therefore verdicts — are reproducible across runs (#8). Otherwise it is
+    cryptographically random.
+    """
     n = length or SETTINGS.control_probe_len
     alphabet = string.ascii_lowercase + string.digits
-    # Prefix unlikely to ever be a real handle.
+    if SETTINGS.deterministic:
+        import hashlib
+
+        seed = f"{SETTINGS.probe_seed}:{key or ''}".encode()
+        digest = hashlib.blake2b(seed, digest_size=n).hexdigest()[:n]
+        return "zz" + digest
     return "zz" + "".join(secrets.choice(alphabet) for _ in range(n))
 
 
@@ -30,6 +41,7 @@ async def evidence_from_response(url: str, resp, elapsed_ms: int = 0,
     body = resp.text[: SETTINGS.max_body_bytes]
     title = similarity.extract_title(body)
     contains = bool(query_term) and query_term.lower() in body.lower()
+    blocked = defenses.detect(resp.status_code, resp.headers, body)
     return Evidence(
         url=url,
         status=resp.status_code,
@@ -39,6 +51,7 @@ async def evidence_from_response(url: str, resp, elapsed_ms: int = 0,
         title=title,
         contains_query=contains,
         elapsed_ms=elapsed_ms,
+        blocked=blocked,
     )
 
 
@@ -53,7 +66,7 @@ class BaselineCache:
         key = rule.name
         if key in self._cache:
             return self._cache[key]
-        probe = random_absent_account()
+        probe = random_absent_account(key=rule.name)
         url = rule.url_for(probe)
         try:
             resp = await self._client.fetch(url)

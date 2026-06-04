@@ -68,6 +68,12 @@ async def _check_site(
     if verdict == Verdict.FOUND:
         signals[f"username:{rule.name.lower()}"] = account
 
+    # Phase separation (#6): a hit only counts as 'verified' when it survived the
+    # strict layers (a usable absent-baseline existed to calibrate against);
+    # otherwise it's a 'discovery' candidate the user should treat as weaker.
+    verified = base is not None and base.status != 0 and not base.blocked
+    phase = "verified" if verified else "discovery"
+
     return Finding(
         source=f"username:{rule.name}",
         category="username",
@@ -78,7 +84,7 @@ async def _check_site(
         reasons=reasons,
         signals=signals,
         data={"status": ev.status, "title": ev.title, "final_url": ev.final_url,
-              "fingerprint": ev.fingerprint},
+              "fingerprint": ev.fingerprint, "phase": phase},
     )
 
 

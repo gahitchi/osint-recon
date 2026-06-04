@@ -1,5 +1,5 @@
 const $ = (s) => document.querySelector(s);
-const order = { FOUND: 0, UNCERTAIN: 1, ERROR: 2, NOT_FOUND: 3 };
+const order = { FOUND: 0, UNCERTAIN: 1, UNVERIFIABLE: 2, ERROR: 3, NOT_FOUND: 4 };
 let es = null;
 
 // --- tab switching ---------------------------------------------------------

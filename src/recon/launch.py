@@ -1,0 +1,127 @@
+"""`specter` launcher: wake the whole stack and open the dashboard in Firefox.
+
+Boots the API/dashboard server plus a background worker and the monitoring
+scheduler, waits until the server is healthy, then opens a Firefox tab pointed at
+the local dashboard. Stays in the foreground supervising the children; Ctrl-C
+shuts everything down cleanly. If the server is already running it just opens the
+tab and exits (the software is already awake).
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+import webbrowser
+from pathlib import Path
+
+from .config import SETTINGS
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BANNER = r"""
+   ____                 _
+  / ___| _ __  ___  ___| |_ ___ _ __
+  \___ \| '_ \/ _ \/ __| __/ _ \ '__|
+   ___) | |_) |  __/ (__| ||  __/ |
+  |____/| .__/ \___|\___|\__\___|_|
+        |_|   osint-recon — waking up…
+"""
+
+
+def _port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
+def _wait_healthy(url: str, timeout: float = 25.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.4)
+    return False
+
+
+def open_firefox(url: str) -> None:
+    """Open `url` in a new Firefox tab; fall back to the default browser."""
+    firefox = shutil.which("firefox") or shutil.which("firefox-esr")
+    if firefox:
+        try:
+            subprocess.Popen([firefox, "--new-tab", url],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        except Exception:
+            pass
+    try:
+        webbrowser.get("firefox").open_new_tab(url)
+    except Exception:
+        webbrowser.open_new_tab(url)
+
+
+def _spawn(args: list[str]) -> subprocess.Popen:
+    return subprocess.Popen([sys.executable, "-m", "recon.cli", *args], cwd=str(PROJECT_ROOT))
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(prog="specter", description="Wake osint-recon and open the dashboard.")
+    p.add_argument("--no-browser", action="store_true", help="don't open Firefox")
+    p.add_argument("--no-workers", action="store_true", help="server only (no worker/scheduler)")
+    p.add_argument("--port", type=int, default=SETTINGS.port)
+    args = p.parse_args()
+
+    host, port = SETTINGS.host, args.port
+    url = f"http://{host}:{port}"
+
+    print(BANNER)
+
+    # Already awake? Just open the tab.
+    if _port_open(host, port):
+        print(f"  already running at {url}")
+        if not args.no_browser:
+            open_firefox(url)
+        return
+
+    procs: list[subprocess.Popen] = [_spawn(["serve"])]
+    if not args.no_workers:
+        procs.append(_spawn(["worker"]))
+        procs.append(_spawn(["monitor"]))
+
+    if _wait_healthy(url):
+        print(f"  dashboard ready at {url}")
+        if not args.no_browser:
+            open_firefox(url)
+            print("  opened Firefox tab")
+    else:
+        print("  server did not become healthy in time; check logs", file=sys.stderr)
+
+    print("  stack running — press Ctrl-C to shut down")
+
+    def _shutdown(*_):
+        for proc in procs:
+            proc.terminate()
+        for proc in procs:
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
+    while True:
+        time.sleep(1)
+        if all(proc.poll() is not None for proc in procs):
+            break
+
+
+if __name__ == "__main__":
+    main()

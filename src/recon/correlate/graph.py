@@ -49,6 +49,32 @@ def _label(attrs: dict) -> str:
     return "identity"
 
 
+def _resolve_conflicts(records: list, observations: list) -> dict:
+    """Conflict resolution (#3): when one strong identifier has multiple values in
+    a cluster, pick the canonical one from the highest-reliability, then
+    highest-confidence, observation that asserts it. Returns {attr: canonical}.
+    """
+    from .resolver import STRONG
+
+    # value -> best (reliability, confidence) seen among observations asserting it
+    best: dict[str, dict[str, tuple[float, float]]] = {}
+    for o in observations:
+        rel = o.reliability or 0.5
+        for k, v in (o.signals or {}).items():
+            base = k.split(":", 1)[0]
+            if base not in STRONG or not v:
+                continue
+            vv = v.lower()
+            cur = best.setdefault(base, {}).get(vv, (-1.0, -1.0))
+            best[base][vv] = max(cur, (rel, o.confidence))
+
+    canonical: dict[str, str] = {}
+    for attr, values in best.items():
+        if len(values) > 1:  # only meaningful when there's a conflict
+            canonical[attr] = max(values.items(), key=lambda kv: kv[1])[0]
+    return canonical
+
+
 def correlate_run(db, run_id: int) -> dict:
     with db.session() as s:
         run = s.get(m.Run, run_id)
@@ -97,6 +123,9 @@ def correlate_run(db, run_id: int) -> dict:
             cl_obs = [obs_by_oid[records[k].obs_id] for k in idxs]
             flags = coherence.check(recs)
             attrs = _merge_attributes(recs)
+            canonical = _resolve_conflicts(recs, cl_obs)
+            if canonical:
+                attrs["_canonical"] = canonical  # winning value per conflicted id
             conf = confidence.entity_confidence(cl_obs, flags)
             ent = m.Entity(label=_label(attrs), attributes=attrs, confidence=conf, flags=flags)
             s.add(ent)

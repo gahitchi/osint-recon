@@ -22,9 +22,12 @@ DISCLAIMER = (
 
 
 def _payload(query, findings: list[Finding], summary: dict) -> dict:
+    from .provenance import provenance
+
     return {
         "tool": "osint-recon",
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "provenance": provenance(),
         "query": query.model_dump(exclude_none=True),
         "disclaimer": DISCLAIMER,
         "summary": summary,
@@ -83,9 +86,12 @@ def entity_report(run_id: int) -> dict:
         target = s.get(m.Target, run.target_id)
         entities = repo.list_entities(s, run.target_id)
         changes = repo.list_changes(s, target_id=run.target_id)
+        from .provenance import provenance
+
         return {
             "tool": "osint-recon",
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "provenance": provenance(),
             "run_id": run_id,
             "target": {"id": target.id, "label": target.label, "query": target.query},
             "disclaimer": DISCLAIMER,

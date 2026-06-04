@@ -36,6 +36,16 @@ def decide(
     if ev.status == 0 or ev.error:
         return Verdict.ERROR, 0.0, [f"request failed: {ev.error or 'no response'}"]
 
+    # Layer 0.5 — adversarial defense: a bot-wall/WAF/JS-gate/rate-limit means we
+    # genuinely cannot tell if the account exists. Report it honestly instead of
+    # emitting a false FOUND (challenge page) or false NOT_FOUND (block).
+    if ev.blocked:
+        return Verdict.UNVERIFIABLE, 0.0, [f"response was a {ev.blocked}"]
+    if baseline is not None and baseline.blocked:
+        return Verdict.UNVERIFIABLE, 0.0, [
+            f"site's absent-baseline was a {baseline.blocked}; cannot calibrate"
+        ]
+
     score = 0.5  # neutral prior on "this account exists"
 
     # --- Layer 1: declared site rule ---
