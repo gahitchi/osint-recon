@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>osint-recon</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>osint&#8209;recon</h1>
+    <p class="tag">Local-first automated OSINT · low false-positive engine</p>
+  </header>
+
+  <form id="q">
+    <div class="grid">
+      <label>Username <input name="username" placeholder="e.g. torvalds" /></label>
+      <label>Email <input name="email" placeholder="e.g. user@example.com" /></label>
+      <label>Phone <input name="phone" placeholder="+14155552671" /></label>
+      <label>Domain <input name="domain" placeholder="example.com" /></label>
+      <label>Name <input name="name" placeholder="Ada Lovelace" /></label>
+    </div>
+    <button type="submit" id="go">Run research</button>
+    <span id="status"></span>
+  </form>
+
+  <section id="legend">
+    <span class="v FOUND">FOUND</span>
+    <span class="v UNCERTAIN">UNCERTAIN</span>
+    <span class="v NOT_FOUND">NOT_FOUND</span>
+    <span class="v ERROR">ERROR</span>
+    <small>UNCERTAIN = plausible but not corroborated enough to confirm.</small>
+  </section>
+
+  <table id="results">
+    <thead>
+      <tr><th>Verdict</th><th>Conf.</th><th>Source</th><th>Label</th><th>Why (reasons)</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <section id="summary"></section>
+
+  <footer>
+    <small>Authorized research / educational use only. Respects robots.txt &amp;
+    rate limits. No data leaves this machine.</small>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

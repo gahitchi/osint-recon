@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osint-recon"
+version = "0.1.0"
+description = "Local-first, fully-automated OSINT research tool with a multi-layer false-positive verification engine."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "httpx[http2]>=0.27",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "phonenumbers>=8.13",
+    "dnspython>=2.6",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+pdf = ["weasyprint>=60"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "respx>=0.21"]
+
+[project.scripts]
+recon = "recon.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

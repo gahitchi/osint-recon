@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated reports (may contain sensitive subject data — keep out of git)
+/reports/*
+!/reports/.gitkeep
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
