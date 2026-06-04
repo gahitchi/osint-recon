@@ -22,6 +22,10 @@ htmlcov/
 /reports/*
 !/reports/.gitkeep
 
+# Local databases (investigation data — keep out of git)
+*.db
+/data/*.db
+
 # Editor / OS
 .idea/
 .vscode/

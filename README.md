@@ -1,13 +1,29 @@
 # osint-recon
 
-A **local-first, fully-automated OSINT research tool** with one overriding design
-goal: **the fewest possible false positives.** Account-enumeration tools fail
-when a site returns `200 OK` for *any* profile URL ("soft 404"); a naive
-`200 == found` check is wrong on a large fraction of sites. osint-recon treats
-that problem as the core of the system.
+A **local-first, professional-grade OSINT investigation framework**. It keeps the
+original overriding goal — **the fewest possible false positives** (soft-404s
+where a site returns `200 OK` for *any* profile URL are rejected, not reported) —
+and builds a full investigation platform around it: a **probabilistic correlation
+engine + identity graph**, **durable persistence**, **long-term monitoring with
+change detection**, and a **pluggable scale-out** path.
 
 Inspired by [Specter](https://github.com/gahitchi/osint): deterministic (no LLM),
 local-only, SSE-streamed, with identity clustering and exportable reports.
+
+## What's new in v0.2 (framework upgrade)
+
+| Capability | Where |
+|---|---|
+| **Durable storage** (targets, runs, observations, entities, jobs) — SQLite by default, Postgres by DSN | `src/recon/store/` |
+| **Connector framework**: result cache, **circuit breakers**, per-source **reliability** scoring → re-runs don't depend on live APIs and a dead source can't stall a scan | `src/recon/connectors/` |
+| **Probabilistic correlation + identity graph**: blocking → Fellegi–Sunter-style weighted matching (Jaro-Winkler names) → MERGE/REVIEW/DISTINCT, with coherence/contradiction checks and confidence propagation | `src/recon/correlate/` |
+| **Long-term monitoring**: cron **scheduler** + run-over-run **change detection** (appeared/disappeared/changed via content fingerprint) | `src/recon/monitor/` |
+| **Scalability**: scans become **durable jobs**; in-process worker pool by default, optional Redis/arq workers + cross-process rate limiting | `src/recon/jobs/`, `ratelimit.py` |
+| **Dashboard + API**: investigations, timeline, identity graph, source-health tabs | `src/recon/server.py`, `web/` |
+
+These directly address the prior limitations: immature correlation, hard
+dependence on live APIs/scrapers, limited scalability, and source-driven output
+quality (now weighted by tracked reliability + contradiction checks).
 
 ## What it does
 
@@ -52,17 +68,40 @@ pip install -e ".[dev]"          # add ,pdf for PDF export: ".[dev,pdf]"
 ## Use
 
 ```bash
-# CLI (scriptable, full automation)
-recon --username torvalds
-recon --email someone@example.com --domain example.com --format json
-recon --username alice --all          # also print NOT_FOUND/ERROR rows
+# Durable, correlated, persisted scan (full automation)
+recon scan --username torvalds --email someone@example.com
+recon scan --domain example.com --format json
+recon scan --username alice --all                 # also show NOT_FOUND/ERROR
 
-# Web UI (SSE live results) on http://127.0.0.1:8000
-recon --serve
+# Long-term monitoring: watch a target on a cron, then run the scheduler + a worker
+recon scan --username torvalds --watch "0 */6 * * *"
+recon monitor        # fires schedules -> enqueues jobs
+recon worker         # processes queued scan jobs (run several to scale out)
+
+# Inspect stored investigation data
+recon targets | recon runs | recon changes | recon sources
+
+# Web dashboard + API on http://127.0.0.1:8000
+recon serve
 ```
 
+Back-compat: `recon --username x` (bare flags) still works and maps to `scan`.
 Reports (`--format json|csv|pdf`) land in `reports/` with full provenance, the
 verdict reason-trail, and a legal disclaimer.
+
+## Scaling out (optional)
+
+Everything defaults to local-first (SQLite + in-process workers). To scale:
+
+```bash
+pip install -e ".[postgres,distributed]"
+export RECON_DB_DSN="postgresql+psycopg://user:pass@host/recon"
+export RECON_REDIS_DSN="redis://localhost:6379"
+# set queue_backend = "arq" in config; run many `recon worker` processes
+```
+
+No code changes — same `JobQueue`/`Store` interfaces, shared cross-process rate
+limiting keeps a fleet polite.
 
 ## Tuning precision vs recall
 

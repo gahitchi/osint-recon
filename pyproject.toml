@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "osint-recon"
-version = "0.1.0"
-description = "Local-first, fully-automated OSINT research tool with a multi-layer false-positive verification engine."
+version = "0.2.0"
+description = "Local-first, professional-grade OSINT investigation framework: low-false-positive collection, probabilistic correlation, and long-term monitoring."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -17,10 +17,15 @@ dependencies = [
     "phonenumbers>=8.13",
     "dnspython>=2.6",
     "jinja2>=3.1",
+    "sqlalchemy>=2.0",
+    "apscheduler>=3.10",
+    "jellyfish>=1.0",
 ]
 
 [project.optional-dependencies]
 pdf = ["weasyprint>=60"]
+postgres = ["psycopg[binary]>=3.1"]
+distributed = ["arq>=0.25", "redis>=5.0"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "respx>=0.21"]
 
 [project.scripts]

@@ -69,6 +69,47 @@ def to_pdf_html(query, findings, summary) -> str:
     </body></html>"""
 
 
+def entity_report(run_id: int) -> dict:
+    """Entity-centric report for a stored run: identities, their corroborating
+    observations (with provenance), and changes since the prior run."""
+    from .store import get_db, repo
+    from .store import models_db as m
+
+    db = get_db()
+    with db.session() as s:
+        run = s.get(m.Run, run_id)
+        if not run:
+            raise ValueError(f"no such run: {run_id}")
+        target = s.get(m.Target, run.target_id)
+        entities = repo.list_entities(s, run.target_id)
+        changes = repo.list_changes(s, target_id=run.target_id)
+        return {
+            "tool": "osint-recon",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "run_id": run_id,
+            "target": {"id": target.id, "label": target.label, "query": target.query},
+            "disclaimer": DISCLAIMER,
+            "identities": [
+                {
+                    "id": e.id, "label": e.label, "confidence": e.confidence,
+                    "flags": e.flags, "attributes": e.attributes,
+                    "evidence": [
+                        {"source": o.source, "label": o.label, "url": o.url,
+                         "verdict": o.verdict, "confidence": o.confidence,
+                         "reliability": o.reliability, "reasons": o.reasons}
+                        for o in e.observations if o.verdict in ("FOUND", "UNCERTAIN")
+                    ],
+                }
+                for e in entities
+            ],
+            "changes": [
+                {"kind": c.kind, "source": c.source, "label": c.label,
+                 "detail": c.detail, "at": c.created_at.isoformat()}
+                for c in changes
+            ],
+        }
+
+
 def save(query, findings, summary, fmt: str, out: str | None = None) -> Path:
     reports = Path(SETTINGS.reports_dir)
     reports.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,89 @@
+"""Probabilistic correlation engine + change detection (offline, via the store)."""
+
+from recon.correlate.resolver import classify, record_from, score
+from recon.correlate.graph import correlate_run
+from recon.monitor.diff import diff_run
+from recon.models import Finding, Query, Verdict
+from recon.store import get_db, repo
+
+
+def _rec(oid, category, label, signals):
+    return record_from(oid, category, label, signals)
+
+
+def test_shared_email_merges():
+    a = _rec(1, "email", "Gravatar", {"email": "ada@x.com", "gravatar_hash": "h1"})
+    b = _rec(2, "name", "OpenAlex: Ada Lovelace", {"email": "ada@x.com"})
+    w, reasons = score(a, b)
+    assert classify(w) == "MERGE", (w, reasons)
+
+
+def test_conflicting_orcid_not_merged():
+    a = _rec(1, "name", "ORCID: Ada Lovelace", {"orcid": "0000-1", "email": "ada@x.com"})
+    b = _rec(2, "name", "ORCID: Ada L", {"orcid": "0000-2", "email": "ada@x.com"})
+    w, _ = score(a, b)
+    # email agrees (+8) but orcid conflicts (-5.4) -> not a clean merge
+    assert classify(w) != "MERGE"
+
+
+def test_distinct_people_stay_separate():
+    a = _rec(1, "name", "OpenAlex: Ada Lovelace", {"orcid": "0000-1"})
+    b = _rec(2, "name", "OpenAlex: Charles Babbage", {"orcid": "0000-2"})
+    w, _ = score(a, b)
+    assert classify(w) == "DISTINCT"
+
+
+def _seed_run(query, findings):
+    db = get_db()
+    with db.session() as s:
+        t = repo.get_or_create_target(s, query)
+        r = repo.create_run(s, t)
+        for f in findings:
+            repo.add_observation(s, r, f)
+        repo.finish_run(s, r, "done", {})
+        return db, t.id, r.id
+
+
+def test_correlate_run_clusters_by_strong_signal():
+    db, tid, rid = _seed_run(Query(name="Ada Lovelace", email="ada@x.com"), [
+        Finding(source="email:gravatar", category="email", label="Gravatar",
+                verdict=Verdict.FOUND, confidence=0.9,
+                signals={"gravatar_hash": "h1", "email": "ada@x.com"}),
+        Finding(source="name:openalex", category="name", label="OpenAlex: Ada Lovelace",
+                verdict=Verdict.FOUND, confidence=0.8, signals={"email": "ada@x.com"}),
+        Finding(source="name:orcid", category="name", label="ORCID: Charles Babbage",
+                verdict=Verdict.UNCERTAIN, confidence=0.5, signals={"orcid": "0000-9"}),
+    ])
+    summary = correlate_run(db, rid)
+    # Ada's two email-linked observations merge; Babbage stays separate.
+    assert summary["identities"] == 2
+    top = summary["clusters"][0]
+    assert top["found"] >= 2
+
+
+def test_diff_detects_appeared_account():
+    q = Query(username="alice")
+    db, tid, r1 = _seed_run(q, [
+        Finding(source="username:GitHub", category="username", label="GitHub",
+                url="https://github.com/alice", verdict=Verdict.FOUND, confidence=1.0,
+                data={"fingerprint": "aaaa"}),
+    ])
+    assert diff_run(db, tid, r1) == []  # first run: no alarms
+
+    with db.session() as s:
+        t = repo.get_or_create_target(s, q)
+        r2 = repo.create_run(s, t)
+        repo.add_observation(s, r2, Finding(
+            source="username:GitHub", category="username", label="GitHub",
+            url="https://github.com/alice", verdict=Verdict.FOUND, confidence=1.0,
+            data={"fingerprint": "aaaa"}))
+        repo.add_observation(s, r2, Finding(
+            source="username:GitLab", category="username", label="GitLab",
+            url="https://gitlab.com/alice", verdict=Verdict.FOUND, confidence=1.0,
+            data={"fingerprint": "bbbb"}))
+        repo.finish_run(s, r2, "done", {})
+        r2id = r2.id
+
+    changes = diff_run(db, tid, r2id)
+    kinds = {(c["kind"], c["label"]) for c in changes}
+    assert ("appeared", "GitLab") in kinds

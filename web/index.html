@@ -9,41 +9,77 @@
 <body>
   <header>
     <h1>osint&#8209;recon</h1>
-    <p class="tag">Local-first automated OSINT · low false-positive engine</p>
+    <p class="tag">Professional OSINT framework · low false-positives · correlation · monitoring</p>
   </header>
 
-  <form id="q">
-    <div class="grid">
-      <label>Username <input name="username" placeholder="e.g. torvalds" /></label>
-      <label>Email <input name="email" placeholder="e.g. user@example.com" /></label>
-      <label>Phone <input name="phone" placeholder="+14155552671" /></label>
-      <label>Domain <input name="domain" placeholder="example.com" /></label>
-      <label>Name <input name="name" placeholder="Ada Lovelace" /></label>
-    </div>
-    <button type="submit" id="go">Run research</button>
-    <span id="status"></span>
-  </form>
+  <nav id="tabs">
+    <button data-tab="search" class="active">Search</button>
+    <button data-tab="investigations">Investigations</button>
+    <button data-tab="timeline">Timeline</button>
+    <button data-tab="graph">Identity graph</button>
+    <button data-tab="sources">Source health</button>
+  </nav>
 
-  <section id="legend">
-    <span class="v FOUND">FOUND</span>
-    <span class="v UNCERTAIN">UNCERTAIN</span>
-    <span class="v NOT_FOUND">NOT_FOUND</span>
-    <span class="v ERROR">ERROR</span>
-    <small>UNCERTAIN = plausible but not corroborated enough to confirm.</small>
+  <!-- SEARCH -->
+  <section class="panel active" id="panel-search">
+    <form id="q">
+      <div class="grid">
+        <label>Username <input name="username" placeholder="e.g. torvalds" /></label>
+        <label>Email <input name="email" placeholder="user@example.com" /></label>
+        <label>Phone <input name="phone" placeholder="+14155552671" /></label>
+        <label>Domain <input name="domain" placeholder="example.com" /></label>
+        <label>Name <input name="name" placeholder="Ada Lovelace" /></label>
+      </div>
+      <button type="submit" id="go">Run (live)</button>
+      <button type="button" id="save">Run &amp; save (persist + correlate)</button>
+      <span id="status"></span>
+    </form>
+
+    <section id="legend">
+      <span class="v FOUND">FOUND</span>
+      <span class="v UNCERTAIN">UNCERTAIN</span>
+      <span class="v NOT_FOUND">NOT_FOUND</span>
+      <span class="v ERROR">ERROR</span>
+      <small>UNCERTAIN = plausible but not corroborated enough to confirm.</small>
+    </section>
+
+    <table id="results">
+      <thead><tr><th>Verdict</th><th>Conf.</th><th>Source</th><th>Label</th><th>Why</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <section id="summary"></section>
   </section>
 
-  <table id="results">
-    <thead>
-      <tr><th>Verdict</th><th>Conf.</th><th>Source</th><th>Label</th><th>Why (reasons)</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <!-- INVESTIGATIONS -->
+  <section class="panel" id="panel-investigations">
+    <h2>Targets</h2><div id="targets"></div>
+    <h2>Recent runs</h2><div id="runs"></div>
+  </section>
 
-  <section id="summary"></section>
+  <!-- TIMELINE -->
+  <section class="panel" id="panel-timeline">
+    <h2>Change timeline</h2>
+    <p class="tag">Differences detected between consecutive runs of a target.</p>
+    <div id="changes"></div>
+  </section>
+
+  <!-- GRAPH -->
+  <section class="panel" id="panel-graph">
+    <h2>Identity graph</h2>
+    <label>Target id <input id="graph-target" type="number" style="width:90px" /></label>
+    <button id="graph-load">Load</button>
+    <div id="entities"></div>
+  </section>
+
+  <!-- SOURCES -->
+  <section class="panel" id="panel-sources">
+    <h2>Source health &amp; reliability</h2>
+    <div id="sources"></div>
+  </section>
 
   <footer>
     <small>Authorized research / educational use only. Respects robots.txt &amp;
-    rate limits. No data leaves this machine.</small>
+    rate limits. Local-first — no data leaves this machine.</small>
   </footer>
 
   <script src="/static/app.js"></script>

@@ -30,3 +30,17 @@ a { color:#58a6ff; }
 #summary { margin-top:20px; }
 .cluster { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:8px 0; }
 footer { margin-top:30px; color:var(--mut); }
+#tabs { display:flex; gap:4px; margin:14px 0 18px; border-bottom:1px solid var(--line); }
+#tabs button { background:transparent; color:var(--mut); border:0; border-bottom:2px solid transparent;
+  border-radius:0; padding:8px 14px; margin:0; cursor:pointer; font-size:13px; }
+#tabs button.active { color:var(--fg); border-bottom-color:#238636; }
+.panel { display:none; }
+.panel.active { display:block; }
+#save { background:#1f6feb; margin-left:8px; }
+.flag { color:var(--error); font-size:11px; border:1px solid var(--error); border-radius:8px; padding:1px 6px; margin-left:6px; }
+.badge { font-size:11px; padding:1px 7px; border-radius:8px; background:#1b1f27; color:var(--mut); }
+.badge.appeared, .badge.closed { color:var(--found); }
+.badge.disappeared, .badge.open { color:var(--error); }
+.badge.changed, .badge.half_open { color:var(--uncertain); }
+.bar { display:inline-block; width:70px; height:8px; background:#1b1f27; border-radius:4px; overflow:hidden; vertical-align:middle; }
+.bar > span { display:block; height:100%; background:#3fb950; }

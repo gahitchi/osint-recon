@@ -51,6 +51,18 @@ class Settings:
     sites_data_file: str = "data/sites.json"
     reports_dir: str = "reports"
 
+    # --- Storage / scale (pluggable; local-first defaults) ---
+    storage_dsn: str = "sqlite:///data/recon.db"  # set RECON_DB_DSN to a Postgres URL
+    queue_backend: str = "local"  # local | arq
+    cache_ttl_seconds: int = 6 * 3600
+    breaker_fail_threshold: int = 4
+    breaker_cooldown_seconds: int = 300
+
+    # --- Correlation / entity resolution thresholds ---
+    name_match_threshold: float = 0.92  # Jaro-Winkler (mirrors Specter)
+    er_merge_threshold: float = 6.0  # summed match weight -> auto-merge
+    er_review_threshold: float = 3.0  # summed match weight -> REVIEW (never silent)
+
     # --- Server ---
     host: str = "127.0.0.1"  # local-first: never bind publicly
     port: int = 8000

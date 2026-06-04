@@ -77,7 +77,8 @@ async def _check_site(
         confidence=conf,
         reasons=reasons,
         signals=signals,
-        data={"status": ev.status, "title": ev.title, "final_url": ev.final_url},
+        data={"status": ev.status, "title": ev.title, "final_url": ev.final_url,
+              "fingerprint": ev.fingerprint},
     )
 
 
