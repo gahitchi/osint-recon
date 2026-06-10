@@ -12,6 +12,7 @@ document.querySelectorAll("#tabs button").forEach((b) => {
     if (b.dataset.tab === "investigations") { loadTargets(); loadRuns(); }
     if (b.dataset.tab === "timeline") loadChanges();
     if (b.dataset.tab === "sources") loadSources();
+    if (b.dataset.tab === "keys") { loadKeys(); loadModules(); }
   });
 });
 
@@ -114,3 +115,145 @@ $("#graph-load").addEventListener("click", () => {
 function badge(k){ return `<span class="badge ${esc(k)}">${esc(k)}</span>`; }
 function bar(v){ v=v||0; return `<span class="bar"><span style="width:${Math.round(v*100)}%"></span></span> ${v.toFixed(2)}`; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// --- Discovery map (self-contained force-directed graph; no external deps) --
+const TYPE_COLORS = {
+  username:"#58a6ff", account_profile:"#79c0ff",
+  email:"#f0883e", domain:"#3fb950", subdomain:"#56d364", hostname:"#56d364",
+  mx_host:"#2ea043", nameserver:"#2ea043",
+  ip_address:"#bc8cff", asn:"#d2a8ff", netblock:"#d2a8ff",
+  url:"#8b949e", link:"#6e7681", hash:"#ff7b72", breach:"#f85149",
+  phone:"#e3b341", name:"#e3b341",
+};
+const typeColor = (t) => TYPE_COLORS[t] || "#8b93a7";
+let mapState = null;
+
+async function loadMap() {
+  const run = $("#map-run").value.trim();
+  $("#map-status").textContent = "Loading…";
+  let url = run ? `/api/runs/${run}/graph` : null;
+  if (!url) {
+    const runs = await (await fetch("/api/runs")).json();
+    if (!runs.length) { $("#map-status").textContent = "No runs yet — run a saved scan first."; return; }
+    url = `/api/runs/${runs[0].id}/graph`;
+  }
+  const g = await (await fetch(url)).json();
+  if (!g.nodes || !g.nodes.length) { $("#map-status").textContent = "No artifacts for this run."; clearMap(); return; }
+  $("#map-status").textContent = `run #${g.run_id}: ${g.nodes.length} nodes, ${g.edges.length} edges`;
+  $("#map-legend").innerHTML = [...new Set(g.nodes.map(n=>n.type))].sort()
+    .map(t=>`<span class="leg"><i style="background:${typeColor(t)}"></i>${esc(t)}</span>`).join("");
+  startSim(g);
+}
+
+function clearMap(){ if(mapState&&mapState.raf) cancelAnimationFrame(mapState.raf);
+  const cv=$("#map-canvas"); if(cv){const c=cv.getContext("2d"); c&&c.clearRect(0,0,cv.width,cv.height);}
+  $("#map-detail").innerHTML=""; }
+
+function startSim(g){
+  if(mapState){ if(mapState.raf) cancelAnimationFrame(mapState.raf);
+    if(mapState.onUp) window.removeEventListener("mouseup", mapState.onUp); }
+  const cv=$("#map-canvas"), wrap=$("#map-wrap");
+  const W=cv.width=wrap.clientWidth||900, H=cv.height=520, ctx=cv.getContext("2d");
+  const byId=new Map();
+  const N=g.nodes.length;
+  const nodes=g.nodes.slice(0,400).map((n,i)=>{ const a=(i/Math.max(1,N))*Math.PI*2;
+    const node={...n, x:Math.cos(a)*140+(Math.random()*30-15), y:Math.sin(a)*140+(Math.random()*30-15),
+                vx:0, vy:0, fx:null, fy:null}; byId.set(n.id,node); return node; });
+  const edges=g.edges.map(e=>({s:byId.get(e.source), t:byId.get(e.target)})).filter(e=>e.s&&e.t);
+  const view={scale:1, ox:0, oy:0};
+  let alpha=1, dragNode=null, hover=null, panning=false, panStart=null;
+  mapState={raf:null, onUp:null};
+
+  const toScreen=(n)=>[W/2+view.ox+n.x*view.scale, H/2+view.oy+n.y*view.scale];
+  const toWorld=(px,py)=>[(px-W/2-view.ox)/view.scale, (py-H/2-view.oy)/view.scale];
+  function pick(px,py){ const [wx,wy]=toWorld(px,py); let best=null,bd=1e9;
+    for(const n of nodes){ const d=(n.x-wx)**2+(n.y-wy)**2; if(d<bd){bd=d;best=n;} }
+    return bd < (14/view.scale)**2 ? best : null; }
+
+  function tick(){
+    if(alpha>0.02){
+      for(let i=0;i<nodes.length;i++){ const a=nodes[i];
+        for(let j=i+1;j<nodes.length;j++){ const b=nodes[j];
+          let dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy+0.01, d=Math.sqrt(d2), f=2400/d2;
+          dx/=d; dy/=d; a.vx+=dx*f; a.vy+=dy*f; b.vx-=dx*f; b.vy-=dy*f; } }
+      for(const e of edges){ let dx=e.t.x-e.s.x, dy=e.t.y-e.s.y, d=Math.sqrt(dx*dx+dy*dy)+0.01, f=(d-72)*0.02;
+        dx/=d; dy/=d; e.s.vx+=dx*f; e.s.vy+=dy*f; e.t.vx-=dx*f; e.t.vy-=dy*f; }
+      for(const n of nodes){ n.vx-=n.x*0.0022; n.vy-=n.y*0.0022;
+        if(n.fx!=null){ n.x=n.fx; n.y=n.fy; n.vx=0; n.vy=0; }
+        else { n.vx*=0.86; n.vy*=0.86; n.x+=n.vx; n.y+=n.vy; } }
+      alpha*=0.99;
+    }
+    draw(); mapState.raf=requestAnimationFrame(tick);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.lineWidth=1; ctx.strokeStyle="rgba(139,147,167,.22)";
+    for(const e of edges){ const [sx,sy]=toScreen(e.s),[tx,ty]=toScreen(e.t);
+      ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(tx,ty); ctx.stroke(); }
+    for(const n of nodes){ const [x,y]=toScreen(n), r=n.depth===0?7:5;
+      ctx.beginPath(); ctx.arc(x,y,r,0,6.2832); ctx.fillStyle=typeColor(n.type); ctx.fill();
+      if(n===hover||n.depth===0){ ctx.lineWidth=2; ctx.strokeStyle="#fff"; ctx.stroke(); } }
+    if(hover){ const [x,y]=toScreen(hover); const txt=`${hover.type}: ${hover.value}`;
+      ctx.font="12px system-ui"; const w=ctx.measureText(txt).width+12;
+      ctx.fillStyle="rgba(0,0,0,.82)"; ctx.fillRect(x+8,y-23,w,18);
+      ctx.fillStyle="#fff"; ctx.fillText(txt, x+14, y-10); }
+  }
+  function detail(n){ $("#map-detail").innerHTML =
+    `<b style="color:${typeColor(n.type)}">${esc(n.type)}</b><br>${esc(n.value)}`+
+    `<br><small class="tag">depth ${n.depth} · via ${esc(n.source_module)} · conf ${(+n.confidence||0).toFixed(2)}</small>`+
+    (n.data&&Object.keys(n.data).length?`<pre>${esc(JSON.stringify(n.data,null,1)).slice(0,600)}</pre>`:""); }
+
+  cv.onmousedown=(ev)=>{ const r=cv.getBoundingClientRect(), px=ev.clientX-r.left, py=ev.clientY-r.top;
+    const n=pick(px,py);
+    if(n){ dragNode=n; n.fx=n.x; n.fy=n.y; detail(n); }
+    else { panning=true; panStart=[px-view.ox, py-view.oy]; } };
+  cv.onmousemove=(ev)=>{ const r=cv.getBoundingClientRect(), px=ev.clientX-r.left, py=ev.clientY-r.top;
+    if(dragNode){ const [wx,wy]=toWorld(px,py); dragNode.fx=wx; dragNode.fy=wy; alpha=Math.max(alpha,0.3); }
+    else if(panning){ view.ox=px-panStart[0]; view.oy=py-panStart[1]; }
+    else { hover=pick(px,py); cv.style.cursor=hover?"pointer":"grab"; } };
+  cv.onwheel=(ev)=>{ ev.preventDefault(); const r=cv.getBoundingClientRect(), px=ev.clientX-r.left, py=ev.clientY-r.top;
+    const [wx,wy]=toWorld(px,py), f=ev.deltaY<0?1.1:0.9;
+    view.scale=Math.min(4, Math.max(0.25, view.scale*f));
+    view.ox=px-W/2-wx*view.scale; view.oy=py-H/2-wy*view.scale; };
+  mapState.onUp=()=>{ if(dragNode){ dragNode.fx=null; dragNode.fy=null; dragNode=null; } panning=false; };
+  window.addEventListener("mouseup", mapState.onUp);
+  tick();
+}
+$("#map-load").addEventListener("click", loadMap);
+
+// --- Modules & keys --------------------------------------------------------
+async function loadModules(){
+  const mods = await (await fetch("/api/modules")).json();
+  let h = `<table><thead><tr><th>Module</th><th>Consumes</th><th>Produces</th><th>Auth</th><th>State</th></tr></thead><tbody>`;
+  for(const m of mods){
+    const auth = m.keyless ? `<span class="badge">keyless</span>`
+      : `<span class="badge open">key: ${esc(m.requires_keys.join(","))}</span>`;
+    const state = m.enabled ? `<span class="v FOUND">enabled</span>` : `<span class="v NOT_FOUND">needs key</span>`;
+    h += `<tr><td><b>${esc(m.name)}</b></td><td><small>${esc(m.consumes.join(", "))}</small></td>`+
+         `<td><small>${esc(m.produces.join(", ")||"—")}</small></td><td>${auth}</td><td>${state}</td></tr>`;
+  }
+  $("#modules").innerHTML = h + "</tbody></table>";
+}
+async function loadKeys(){
+  const keys = await (await fetch("/api/keys")).json();
+  let h = `<table><thead><tr><th>Key</th><th>Status</th><th>Used by</th><th>Configure</th></tr></thead><tbody>`;
+  for(const k of keys){
+    const status = k.configured ? `<span class="v FOUND">set (${esc(k.source)})</span>`
+      : (k.optional ? `<span class="badge">optional</span>` : `<span class="v NOT_FOUND">not set</span>`);
+    h += `<tr><td><b>${esc(k.name)}</b><br><small class="tag">${esc(k.description)}</small></td>`+
+         `<td>${status}</td><td><small>${esc((k.modules||[]).join(", "))}</small></td>`+
+         `<td><input data-key="${esc(k.name)}" type="password" placeholder="paste key…" style="width:150px" />`+
+         ` <button class="setkey" data-key="${esc(k.name)}">Save</button>`+
+         (k.source==="file" ? ` <button class="clearkey" data-key="${esc(k.name)}">Clear</button>` : "")+
+         (k.source==="env" ? ` <small class="tag">(from env)</small>` : "")+`</td></tr>`;
+  }
+  $("#keys").innerHTML = h + "</tbody></table>";
+  document.querySelectorAll(".setkey").forEach(b=>b.onclick=()=>
+    saveKey(b.dataset.key, document.querySelector(`input[data-key="${b.dataset.key}"]`).value));
+  document.querySelectorAll(".clearkey").forEach(b=>b.onclick=()=>saveKey(b.dataset.key, ""));
+}
+async function saveKey(name, value){
+  await fetch("/api/keys", { method:"POST", headers:{"Content-Type":"application/json"},
+                             body: JSON.stringify({ name, value }) });
+  loadKeys(); loadModules();
+}

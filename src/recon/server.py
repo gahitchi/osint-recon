@@ -15,14 +15,24 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import SETTINGS
+from .keys import KNOWN_KEYS, VAULT
 from .models import Query
+from .modules.registry import MODULES
 from .orchestrator import run_stream, scan
 from .store import get_db, repo
+
+# Which modules consume each known key (required gating + optional enhancement).
+_OPTIONAL_KEY_USERS = {"github": ["github"], "hibp": ["breach"]}
+
+
+def _modules_for_key(name: str) -> list[str]:
+    used = [m.name for m in MODULES if name in m.requires_keys]
+    return used or _OPTIONAL_KEY_USERS.get(name, [])
 
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.3.0")
+app = FastAPI(title="osint-recon", version="0.4.0")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -144,6 +154,54 @@ async def api_sources() -> JSONResponse:
             _row(src, ("name", "kind", "enabled", "reliability", "successes",
                        "failures", "breaker_state")) for src in rows
         ])
+
+
+# --- Module catalogue ------------------------------------------------------
+
+@app.get("/api/modules")
+async def api_modules() -> JSONResponse:
+    """The engine's module catalogue: what each consumes/produces, whether it
+    needs keys, and whether it's currently enabled (keyless or key present)."""
+    return JSONResponse([
+        {
+            "name": m.name,
+            "consumes": sorted(t.value for t in m.consumes),
+            "produces": sorted(t.value for t in m.produces),
+            "keyless": not m.requires_keys,
+            "requires_keys": list(m.requires_keys),
+            "passive": m.passive,
+            "reliability_prior": m.reliability_prior,
+            "enabled": VAULT.has_all(m.requires_keys),
+        }
+        for m in MODULES
+    ])
+
+
+# --- API-key vault (local-first; values never returned) --------------------
+
+@app.get("/api/keys")
+async def api_keys() -> JSONResponse:
+    """Configured/source status for each known key — never the secret value."""
+    VAULT.reload()
+    return JSONResponse([
+        {**k, "modules": _modules_for_key(k["name"])} for k in VAULT.status()
+    ])
+
+
+@app.post("/api/keys")
+async def api_set_key(payload: dict) -> JSONResponse:
+    """Set (or clear, when value is blank) a known key in the local keys.toml."""
+    name = str(payload.get("name", "")).lower()
+    if name not in {k["name"] for k in KNOWN_KEYS}:
+        return JSONResponse({"error": f"unknown key '{name}'"}, status_code=400)
+    value = (payload.get("value") or "").strip()
+    if value:
+        VAULT.set(name, value)
+    else:
+        VAULT.clear(name)
+    return JSONResponse({
+        "name": name, "configured": VAULT.has(name), "source": VAULT.source(name),
+    })
 
 
 if WEB_DIR.exists():

@@ -17,7 +17,9 @@
     <button data-tab="investigations">Investigations</button>
     <button data-tab="timeline">Timeline</button>
     <button data-tab="graph">Identity graph</button>
+    <button data-tab="map">Discovery map</button>
     <button data-tab="sources">Source health</button>
+    <button data-tab="keys">Modules &amp; keys</button>
   </nav>
 
   <!-- SEARCH -->
@@ -73,10 +75,40 @@
     <div id="entities"></div>
   </section>
 
+  <!-- DISCOVERY MAP -->
+  <section class="panel" id="panel-map">
+    <h2>Discovery map</h2>
+    <p class="tag">The recursive scan's artifact graph: how each pivot led to the
+    next. Drag nodes, scroll to zoom, click a node for detail.</p>
+    <div class="maprow">
+      <label>Run id <input id="map-run" type="number" style="width:90px" placeholder="latest" /></label>
+      <button id="map-load">Load</button>
+      <span id="map-status" class="tag"></span>
+    </div>
+    <div id="map-legend" class="map-legend"></div>
+    <div id="map-wrap">
+      <canvas id="map-canvas"></canvas>
+      <div id="map-detail" class="map-detail"></div>
+    </div>
+  </section>
+
   <!-- SOURCES -->
   <section class="panel" id="panel-sources">
     <h2>Source health &amp; reliability</h2>
     <div id="sources"></div>
+  </section>
+
+  <!-- MODULES & KEYS -->
+  <section class="panel" id="panel-keys">
+    <h2>API keys</h2>
+    <p class="tag">Optional. osint-recon is keyless-first; keys only unlock the
+    commercial modules below. Stored locally in <code>~/.config/osint-recon/keys.toml</code>
+    (0600) — values are never sent back to the browser.</p>
+    <div id="keys"></div>
+    <h2>Module catalogue</h2>
+    <p class="tag">Every source the recursive engine can dispatch. Keyed modules
+    are skipped until their key is set.</p>
+    <div id="modules"></div>
   </section>
 
   <footer>

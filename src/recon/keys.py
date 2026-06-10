@@ -1,14 +1,16 @@
 """Optional API-key vault.
 
-osint-recon is keyless-first: every Phase-1 module runs with no credentials. But
-the engine is built so *keyed* modules (Shodan, HaveIBeenPwned, VirusTotal, ...)
-can be added later without re-architecting — a module declares `requires_keys`,
-and the engine simply skips it when the named keys are absent.
+osint-recon is keyless-first: every default module runs with no credentials. The
+engine is built so *keyed* modules (Shodan, VirusTotal, AbuseIPDB, ...) plug in
+without re-architecting — a module declares `requires_keys`, and the engine skips
+it when the named keys are absent.
 
 Keys are read from (in priority order):
   1. environment variables, upper-cased + prefixed, e.g. RECON_KEY_SHODAN
-  2. ~/.config/osint-recon/keys.toml   ([keys] shodan = "...")
-Nothing is ever written; this module only reads.
+  2. <config>/keys.toml   ([keys] shodan = "...")   (RECON_KEYS_FILE overrides path)
+
+The web UI can also *write* keys (local-first, 127.0.0.1 only); the file is
+created 0600 and values are never returned by the API.
 """
 
 from __future__ import annotations
@@ -17,29 +19,66 @@ import os
 import tomllib
 from pathlib import Path
 
-_CONFIG_PATH = Path(
-    os.environ.get("RECON_KEYS_FILE")
-    or (Path.home() / ".config" / "osint-recon" / "keys.toml")
-)
+# Catalogue of keys osint-recon knows how to use. `optional` keys merely enhance a
+# keyless module (higher rate limit / richer data); non-optional keys gate a module
+# that does nothing without them.
+KNOWN_KEYS: list[dict] = [
+    {"name": "shodan", "optional": False,
+     "description": "Shodan host data (IP → open ports/services/hostnames)"},
+    {"name": "virustotal", "optional": False,
+     "description": "VirusTotal reputation for domains/IPs"},
+    {"name": "abuseipdb", "optional": False,
+     "description": "AbuseIPDB abuse-confidence score for IPs"},
+    {"name": "github", "optional": True,
+     "description": "GitHub token — raises the public API rate limit (60→5000/hr)"},
+    {"name": "hibp", "optional": True,
+     "description": "HaveIBeenPwned — richer breach data alongside keyless XposedOrNot"},
+]
+
+_DEFAULT_PATH = Path.home() / ".config" / "osint-recon" / "keys.toml"
+
+
+def _dump_toml(keys: dict[str, str]) -> str:
+    lines = ["[keys]"]
+    for k in sorted(keys):
+        v = str(keys[k]).replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'{k} = "{v}"')
+    return "\n".join(lines) + "\n"
 
 
 class KeyVault:
-    def __init__(self, path: Path = _CONFIG_PATH) -> None:
-        self._path = path
+    def __init__(self, path: Path | None = None) -> None:
+        # When path is None the location is resolved from RECON_KEYS_FILE at access
+        # time, so tests (and runtime env changes) take effect without a restart.
+        self._explicit_path = path
         self._file_keys: dict[str, str] = {}
         self._loaded = False
+
+    @property
+    def path(self) -> Path:
+        if self._explicit_path is not None:
+            return self._explicit_path
+        return Path(os.environ.get("RECON_KEYS_FILE") or _DEFAULT_PATH)
+
+    def reload(self) -> None:
+        """Force a re-read on next access (used after writes / in tests)."""
+        self._loaded = False
+        self._file_keys = {}
 
     def _load(self) -> None:
         if self._loaded:
             return
         self._loaded = True
         try:
-            if self._path.is_file():
-                data = tomllib.loads(self._path.read_text(encoding="utf-8"))
+            p = self.path
+            if p.is_file():
+                data = tomllib.loads(p.read_text(encoding="utf-8"))
                 keys = data.get("keys", data)
                 self._file_keys = {str(k).lower(): str(v) for k, v in keys.items()}
         except Exception:  # noqa: BLE001 - a malformed key file must not crash a scan
             self._file_keys = {}
+
+    # --- read ---------------------------------------------------------------
 
     def get(self, name: str) -> str | None:
         env = os.environ.get(f"RECON_KEY_{name.upper()}")
@@ -53,6 +92,43 @@ class KeyVault:
 
     def has_all(self, names: list[str]) -> bool:
         return all(self.has(n) for n in names)
+
+    def source(self, name: str) -> str | None:
+        """Where a key is configured: 'env', 'file', or None. Never the value."""
+        if os.environ.get(f"RECON_KEY_{name.upper()}"):
+            return "env"
+        self._load()
+        return "file" if self._file_keys.get(name.lower()) else None
+
+    def status(self) -> list[dict]:
+        """Catalogue + configured/source flags for the UI. Values are never exposed."""
+        return [
+            {**k, "configured": self.has(k["name"]), "source": self.source(k["name"])}
+            for k in KNOWN_KEYS
+        ]
+
+    # --- write (local-first; file is 0600) ----------------------------------
+
+    def set(self, name: str, value: str) -> None:
+        self._load()
+        self._file_keys[name.lower()] = value
+        self._persist()
+
+    def clear(self, name: str) -> None:
+        """Remove a key from the file. (Env-provided keys can't be cleared here.)"""
+        self._load()
+        self._file_keys.pop(name.lower(), None)
+        self._persist()
+
+    def _persist(self) -> None:
+        p = self.path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_dump_toml(self._file_keys), encoding="utf-8")
+        try:
+            p.chmod(0o600)
+        except OSError:
+            pass
+        self.reload()
 
 
 VAULT = KeyVault()

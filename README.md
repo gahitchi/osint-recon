@@ -51,7 +51,7 @@ only.**
 | **Probabilistic correlation + identity graph**: blocking → Fellegi–Sunter-style weighted matching (Jaro-Winkler names) → MERGE/REVIEW/DISTINCT, with coherence/contradiction checks and confidence propagation | `src/recon/correlate/` |
 | **Long-term monitoring**: cron **scheduler** + run-over-run **change detection** (appeared/disappeared/changed via content fingerprint) | `src/recon/monitor/` |
 | **Scalability**: scans become **durable jobs**; in-process worker pool by default, optional Redis/arq workers + cross-process rate limiting | `src/recon/jobs/`, `ratelimit.py` |
-| **Dashboard + API**: investigations, timeline, identity graph, source-health tabs | `src/recon/server.py`, `web/` |
+| **Dashboard + API**: investigations, timeline, identity graph, **interactive discovery map**, source-health, and **modules/keys** tabs | `src/recon/server.py`, `web/` |
 
 These directly address the prior limitations: immature correlation, hard
 dependence on live APIs/scrapers, limited scalability, and source-driven output
@@ -78,7 +78,8 @@ engine.
 ```bash
 recon scan --domain example.com --max-depth 2 --scope strict
 recon graph --run 1          # depth-indented artifact tree (the pivot chain)
-# GET /api/runs/{id}/graph   # nodes + edges as JSON (force-directed UI: later phase)
+recon serve                  # dashboard: interactive force-directed Discovery map,
+                             # plus a Modules & keys tab to manage optional API keys
 ```
 
 ### Source catalogue (v0.3 modules)
