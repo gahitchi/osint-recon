@@ -26,6 +26,12 @@ htmlcov/
 *.db
 /data/*.db
 
+# Fetched WhatsMyName dataset (opt-in via scripts/fetch_wmn.py; CC BY 4.0, large)
+/data/wmn-data.json
+
+# Local API-key vault (never commit secrets)
+keys.toml
+
 # Editor / OS
 .idea/
 .vscode/

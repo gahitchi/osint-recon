@@ -43,7 +43,10 @@ def _add_identifier_args(p: argparse.ArgumentParser) -> None:
 # --- scan ------------------------------------------------------------------
 
 async def _cmd_scan(args) -> int:
+    import dataclasses
+
     from .orchestrator import scan
+    from .config import SETTINGS
     from . import reporting
 
     query = Query(username=args.username, email=args.email, phone=args.phone,
@@ -52,8 +55,17 @@ async def _cmd_scan(args) -> int:
         print("provide at least one identifier", file=sys.stderr)
         return 2
 
+    overrides: dict = {}
+    if args.max_depth is not None:
+        overrides["max_depth"] = args.max_depth
+    if args.scope:
+        overrides["scope_mode"] = args.scope
+    if args.passive is not None:
+        overrides["passive_only"] = args.passive
+    settings = dataclasses.replace(SETTINGS, **overrides) if overrides else SETTINGS
+
     watch = bool(args.watch)
-    result = await scan(query, label=args.label, watchlist=watch)
+    result = await scan(query, label=args.label, watchlist=watch, settings=settings)
 
     findings = result["findings"]
     for f in findings:
@@ -73,8 +85,10 @@ async def _cmd_scan(args) -> int:
         for ch in result["changes"]:
             print(f"  {ch['kind']:<11} {ch['source']} {ch['label']}", file=sys.stderr)
 
+    stop = f"  (stopped: {result['stop_reason']})" if result.get("stop_reason") else ""
     print(f"\nrun #{result['run_id']} — {sum(1 for f in findings if f.is_hit)} hit(s) "
-          f"of {len(findings)} checks.", file=sys.stderr)
+          f"of {len(findings)} checks; {len(result.get('artifacts', []))} artifact(s) "
+          f"discovered.{stop}", file=sys.stderr)
 
     if watch and args.watch:
         from .store import get_db, repo
@@ -117,6 +131,57 @@ def _cmd_list(args) -> int:
     return 0
 
 
+# --- graph -----------------------------------------------------------------
+
+def _cmd_graph(args) -> int:
+    """Print the discovery graph of a run as a depth-indented artifact tree."""
+    from .store import get_db, repo
+
+    db = get_db()
+    with db.session() as s:
+        run_id = args.run
+        if run_id is None:
+            runs = repo.list_runs(s, limit=1)
+            if not runs:
+                print("no runs yet", file=sys.stderr)
+                return 1
+            run_id = runs[0].id
+        arts = repo.list_artifacts(s, run_id)
+        edges = repo.list_artifact_edges(s, run_id)
+
+    if not arts:
+        print(f"run #{run_id}: no artifacts recorded", file=sys.stderr)
+        return 0
+
+    children: dict[int, list] = {}
+    has_parent: set[int] = set()
+    by_id = {a.id: a for a in arts}
+    for e in edges:
+        if e.src_artifact_id in by_id and e.dst_artifact_id in by_id:
+            children.setdefault(e.src_artifact_id, []).append(e.dst_artifact_id)
+            has_parent.add(e.dst_artifact_id)
+
+    print(f"run #{run_id} — {len(arts)} artifact(s), {len(edges)} edge(s)")
+    seen: set[int] = set()
+
+    def walk(aid: int, indent: int) -> None:
+        if aid in seen:  # an artifact can be reached by multiple parents
+            a = by_id[aid]
+            print(f"{'  ' * indent}↳ {a.type}:{a.value}  (↑ shared)")
+            return
+        seen.add(aid)
+        a = by_id[aid]
+        via = f"  via {a.source_module}" if a.source_module != "seed" else ""
+        print(f"{'  ' * indent}• {a.type:<16} {a.value}{via}")
+        for cid in children.get(aid, []):
+            walk(cid, indent + 1)
+
+    for a in arts:
+        if a.id not in has_parent:  # roots (seeds)
+            walk(a.id, 0)
+    return 0
+
+
 # --- main ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -130,6 +195,19 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--watch", metavar="CRON", help="add target to watchlist on this cron")
     sc.add_argument("--format", choices=["json", "csv", "pdf"])
     sc.add_argument("--out")
+    # Recursive-engine controls (override config defaults for this run).
+    sc.add_argument("--max-depth", type=int, dest="max_depth",
+                    help="how many pivots deep the recursive engine may go")
+    sc.add_argument("--scope", choices=["strict", "aggressive"],
+                    help="strict: only expand artifacts tied to the seed; aggressive: follow external pivots")
+    pg = sc.add_mutually_exclusive_group()
+    pg.add_argument("--passive", dest="passive", action="store_true", default=None,
+                    help="passive modules only (default)")
+    pg.add_argument("--active", dest="passive", action="store_false",
+                    help="also run active modules")
+
+    gr = sub.add_parser("graph", help="print the discovery graph (artifact tree) of a run")
+    gr.add_argument("--run", type=int, help="run id (defaults to the latest run)")
 
     sub.add_parser("serve", help="launch the local web dashboard + API")
     wk = sub.add_parser("worker", help="process queued scan jobs")
@@ -155,6 +233,8 @@ def main() -> None:
 
     if cmd == "scan":
         raise SystemExit(asyncio.run(_cmd_scan(args)))
+    if cmd == "graph":
+        raise SystemExit(_cmd_graph(args))
     if cmd == "serve":
         from .server import main as serve_main
         serve_main()

@@ -57,6 +57,55 @@ These directly address the prior limitations: immature correlation, hard
 dependence on live APIs/scrapers, limited scalability, and source-driven output
 quality (now weighted by tracked reliability + contradiction checks).
 
+## What's new in v0.3 — the recursive engine
+
+A scan is no longer a single pass over the seed identifiers. It is now an
+**event-driven graph traversal**: seeds become typed **artifacts**, each artifact
+is dispatched to every **module** that consumes its type, and modules emit *new*
+artifacts that are fed back into the frontier until it drains. This is the
+auto-pivoting behavior that defines tools like SpiderFoot — but kept honest with
+hard ceilings and a scope policy, and feeding the same low-false-positive verify
+engine.
+
+| Capability | Where |
+|---|---|
+| **Recursive traversal**: `domain → subdomains → IPs → ASN/netblock`, `email → domain + username pivot`, `username → profile → cross-linked handles/emails` | `src/recon/engine.py`, `src/recon/modules/` |
+| **Typed artifact graph** (nodes + provenance edges), distinct from the identity-cluster graph | `src/recon/graph_models.py`, `store/models_db.py` (`artifacts`, `artifact_edges`) |
+| **Bounded & scoped**: `max_depth` / `max_artifacts` / `max_requests` ceilings + `strict`/`aggressive` scope so recursion never runs away or wanders off-target | `config.py`, `engine.ScopePolicy` |
+| **Keyless recursive modules**: DNS resolution, **Team Cymru** IP→ASN (DNS whois, no key), profile-link enrichment, Wayback CDX | `src/recon/modules/{resolve,asn,profile_links,wayback}.py` |
+| **Keyless-first, keys optional**: a module declares `requires_keys`; the engine skips it when keys are absent, so commercial sources (Shodan/HIBP/VT) can plug in later | `src/recon/keys.py` |
+
+```bash
+recon scan --domain example.com --max-depth 2 --scope strict
+recon graph --run 1          # depth-indented artifact tree (the pivot chain)
+# GET /api/runs/{id}/graph   # nodes + edges as JSON (force-directed UI: later phase)
+```
+
+### Source catalogue (v0.3 modules)
+
+18 modules feed the engine; new sources are cheap to add (one `Module` in
+`src/recon/modules/`, registered in `registry.py`). All flow through the same
+verify/reliability/scope machinery, so breadth arrives without the usual noise.
+
+| Family | Modules (keyless unless noted) |
+|---|---|
+| Accounts | `username` (curated seed **or full WhatsMyName 600+**), `github` (profile + **commit-email harvest**; key-enhanced), `profile_links` (cross-linked handles/emails) |
+| Email / breach | `email` (Gravatar/MX), `breach` (XposedOrNot; HIBP if keyed) |
+| Domain / DNS | `domain` (DNS/RDAP/crt.sh), `dns_intel` (SPF/DMARC/CAA + SPF-derived infra), `wayback`, `commoncrawl` |
+| Network | `resolve` (→IP), `asn` (Team Cymru), `ripestat` (RIR prefixes + abuse contact), `ip_geo` (ip-api) |
+| People | `phone` (offline libphonenumber), `name` (ORCID/OpenAlex) |
+| Keyed, optional | `shodan`, `virustotal`, `abuseipdb` — auto-skipped unless the key is set |
+
+```bash
+# Broaden username coverage to the full WhatsMyName dataset (opt-in):
+python scripts/fetch_wmn.py
+RECON_SITES_FILE=data/wmn-data.json recon scan --username torvalds
+
+# Optional keys: env (RECON_KEY_SHODAN=...) or ~/.config/osint-recon/keys.toml
+#   [keys]
+#   shodan = "..."   # also: virustotal, abuseipdb, github, hibp
+```
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

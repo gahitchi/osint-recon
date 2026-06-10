@@ -22,7 +22,7 @@ from .store import get_db, repo
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.2.0")
+app = FastAPI(title="osint-recon", version="0.3.0")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -112,6 +112,28 @@ async def api_changes_all(target_id: int | None = None) -> JSONResponse:
 @app.get("/api/targets/{target_id}/changes")
 async def api_changes(target_id: int) -> JSONResponse:
     return await api_changes_all(target_id=target_id)
+
+
+@app.get("/api/runs/{run_id}/graph")
+async def api_run_graph(run_id: int) -> JSONResponse:
+    """The discovery graph of a run: artifacts (nodes) + provenance edges. Phase 1
+    exposes the data; force-directed rendering lands in a later phase."""
+    with get_db().session() as s:
+        arts = repo.list_artifacts(s, run_id)
+        edges = repo.list_artifact_edges(s, run_id)
+        return JSONResponse({
+            "run_id": run_id,
+            "nodes": [
+                {"id": a.id, "type": a.type, "value": a.value, "depth": a.depth,
+                 "source_module": a.source_module, "confidence": a.confidence,
+                 "data": a.data}
+                for a in arts
+            ],
+            "edges": [
+                {"source": e.src_artifact_id, "target": e.dst_artifact_id,
+                 "module": e.module} for e in edges
+            ],
+        })
 
 
 @app.get("/api/sources")

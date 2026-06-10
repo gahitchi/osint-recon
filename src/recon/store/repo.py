@@ -178,3 +178,42 @@ def list_entities(s: Session, target_id: int) -> list[m.Entity]:
 
 def list_sources(s: Session) -> list[m.Source]:
     return list(s.execute(select(m.Source).order_by(m.Source.name)).scalars().all())
+
+
+# --- Discovery graph (artifacts + edges) -----------------------------------
+
+def persist_graph(s: Session, run: m.Run, artifacts: list, edges: list) -> None:
+    """Persist the recursive scan's artifact nodes and provenance edges.
+
+    `artifacts` are graph_models.Artifact; `edges` are engine._Edge
+    (src_key/dst_key/module/detail). Edges whose endpoints weren't admitted as
+    nodes (e.g. dropped on a budget ceiling) are skipped."""
+    key_to_id: dict[str, int] = {}
+    for a in artifacts:
+        node = m.ArtifactNode(
+            run_id=run.id, target_id=run.target_id, type=a.type.value,
+            value=a.value, normalized=a.normalized, depth=a.depth,
+            source_module=a.source_module, confidence=a.confidence, data=dict(a.data),
+        )
+        s.add(node)
+        s.flush()
+        key_to_id[a.key] = node.id
+    for e in edges:
+        src, dst = key_to_id.get(e.src_key), key_to_id.get(e.dst_key)
+        if src is None or dst is None:
+            continue
+        s.add(m.ArtifactEdge(run_id=run.id, src_artifact_id=src,
+                             dst_artifact_id=dst, module=e.module, detail=dict(e.detail)))
+
+
+def list_artifacts(s: Session, run_id: int) -> list[m.ArtifactNode]:
+    return list(s.execute(
+        select(m.ArtifactNode).where(m.ArtifactNode.run_id == run_id)
+        .order_by(m.ArtifactNode.depth, m.ArtifactNode.id)
+    ).scalars().all())
+
+
+def list_artifact_edges(s: Session, run_id: int) -> list[m.ArtifactEdge]:
+    return list(s.execute(
+        select(m.ArtifactEdge).where(m.ArtifactEdge.run_id == run_id)
+    ).scalars().all())

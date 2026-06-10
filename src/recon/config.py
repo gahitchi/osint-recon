@@ -3,6 +3,7 @@ of the false-positive engine — tune them in one place."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 
@@ -52,8 +53,25 @@ class Settings:
         )
     )
 
+    # --- Recursive engine (event-driven graph traversal) ---
+    # Hard ceilings so recursion is bounded and predictable. A scan stops as soon
+    # as any ceiling is hit and reports the stop reason (never runs away).
+    max_depth: int = 3            # how many pivots deep the frontier may grow
+    max_artifacts: int = 500      # total distinct artifacts admitted to the graph
+    max_requests: int = 2000      # total module dispatches (a rough request budget)
+    # strict  = only expand artifacts that chain back to a seed (subdomains/IPs of
+    #           seed domains, handle pivots of seed identities); external domains
+    #           discovered via links are recorded but not expanded.
+    # aggressive = follow external pivots too (noisier, wider).
+    scope_mode: str = "strict"    # strict | aggressive
+    passive_only: bool = True     # never run modules marked passive=False
+
     # --- Paths ---
-    sites_data_file: str = "data/sites.json"
+    # Point RECON_SITES_FILE at a full WhatsMyName wmn-data.json (600+ sites) to
+    # broaden username coverage; the curated seed is the zero-setup default.
+    sites_data_file: str = field(
+        default_factory=lambda: os.environ.get("RECON_SITES_FILE", "data/sites.json")
+    )
     reports_dir: str = "reports"
 
     # --- Storage / scale (pluggable; local-first defaults) ---

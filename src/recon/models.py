@@ -46,6 +46,24 @@ class Query(BaseModel):
             (self.username, self.email, self.phone, self.domain, self.name)
         )
 
+    def to_seed_artifacts(self) -> list["Artifact"]:
+        """Map each provided identifier to a depth-0 seed Artifact for the engine."""
+        from .graph_models import Artifact, ArtifactType
+
+        field_map = {
+            "username": ArtifactType.USERNAME,
+            "email": ArtifactType.EMAIL,
+            "phone": ArtifactType.PHONE,
+            "domain": ArtifactType.DOMAIN,
+            "name": ArtifactType.NAME,
+        }
+        seeds: list["Artifact"] = []
+        for field, atype in field_map.items():
+            value = getattr(self, field)
+            if value:
+                seeds.append(Artifact.make(atype, value, source_module="seed"))
+        return seeds
+
 
 class SiteRule(BaseModel):
     """One site's detection rule, modeled on the WhatsMyName (wmn-data) schema."""

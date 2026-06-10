@@ -1,9 +1,10 @@
-"""Orchestrator: run every relevant collector concurrently against one Query,
-streaming findings as they resolve and clustering them at the end.
+"""Orchestrator: drive a recursive scan over one Query and stream findings.
 
-Full automation: the caller supplies identifiers and gets a complete run with
-no further interaction. Findings are pushed through an async queue so both the
-CLI and the SSE server can consume the same stream.
+The traversal itself lives in `engine.GraphScanEngine` (an event-driven graph:
+seeds -> modules -> new artifacts -> modules -> ...). This module is the thin
+layer that adapts the engine to the three consumers — the SSE server, the CLI,
+and the durable `scan()` persistence path — and keeps the same event-dict
+contract those consumers already depend on.
 """
 
 from __future__ import annotations
@@ -11,61 +12,26 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator
 
-from .config import SETTINGS
-from .connectors import applicable_connectors
-from .correlate import score
-from .correlate.cluster import cluster
-from .http_client import RateLimitedClient
+from .config import SETTINGS, Settings
+from .engine import GraphScanEngine
 from .models import Finding, Query
 
 
-async def run_stream(query: Query) -> AsyncIterator[dict]:
+async def run_stream(query: Query, settings: Settings = SETTINGS) -> AsyncIterator[dict]:
     """Yield event dicts: {"type": "finding"|"summary"|"done"|"error", ...}.
 
-    Each applicable source runs through its resilient Connector wrapper (cache +
-    circuit breaker + reliability), so a dead source degrades gracefully.
-    """
-    query = query.normalized()
-    if query.is_empty():
-        yield {"type": "error", "message": "no identifiers provided"}
-        return
-
-    queue: asyncio.Queue = asyncio.Queue()
-    collected: list[Finding] = []
-
-    async def emit(f: Finding) -> None:
-        await queue.put(f)
-
-    async def worker() -> None:
-        async with RateLimitedClient(SETTINGS) as client:
-            connectors = [c for c in applicable_connectors(query)
-                          if c.kind in SETTINGS.enabled_collectors]
-            tasks = [asyncio.create_task(c.run(query, client, emit)) for c in connectors]
-            await asyncio.gather(*tasks, return_exceptions=True)
-        await queue.put(None)  # sentinel
-
-    task = asyncio.create_task(worker())
-    try:
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            collected.append(item)
-            yield {"type": "finding", "finding": item.model_dump()}
-    finally:
-        await task
-
-    identities = cluster([f for f in collected if f.is_hit])
-    yield {"type": "summary", "summary": score.summarize(identities)}
-    yield {"type": "done", "total": len(collected),
-           "hits": sum(1 for f in collected if f.is_hit)}
+    Each module runs through its resilient wrapper (cache + circuit breaker +
+    reliability), so a dead source degrades gracefully and recursion proceeds."""
+    engine = GraphScanEngine(query, settings)
+    async for event in engine.stream():
+        yield event
 
 
-async def run_collect(query: Query) -> dict:
+async def run_collect(query: Query, settings: Settings = SETTINGS) -> dict:
     """Non-streaming convenience: run fully and return all findings + summary."""
     findings: list[Finding] = []
     summary: dict = {}
-    async for ev in run_stream(query):
+    async for ev in run_stream(query, settings):
         if ev["type"] == "finding":
             findings.append(Finding(**ev["finding"]))
         elif ev["type"] == "summary":
@@ -73,18 +39,17 @@ async def run_collect(query: Query) -> dict:
     return {"findings": findings, "summary": summary}
 
 
-async def scan(query: Query, *, label: str | None = None, watchlist: bool = False) -> dict:
-    """Durable scan: persist a Run + Observations, correlate into the identity
-    graph, and diff against the previous run for change detection.
+async def scan(query: Query, *, label: str | None = None, watchlist: bool = False,
+               settings: Settings = SETTINGS) -> dict:
+    """Durable scan: persist a Run + Observations + the discovery graph, correlate
+    into the identity graph, and diff against the previous run for change detection.
 
-    Returns {"run_id", "target_id", "findings", "changes", "summary"}.
+    Returns {"run_id", "target_id", "findings", "summary", "changes",
+             "artifacts", "edges", "stop_reason"}.
     """
-    import asyncio
-
-    from .store import get_db
-    from .store import repo
-    from .monitor.diff import diff_run
     from .correlate.graph import correlate_run
+    from .monitor.diff import diff_run
+    from .store import get_db, repo
 
     db = get_db()
     db.create_all()
@@ -99,8 +64,9 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
 
     target_id, run_id = await asyncio.to_thread(_open)
 
+    engine = GraphScanEngine(query, settings)
     findings: list[Finding] = []
-    async for ev in run_stream(query):
+    async for ev in engine.stream():
         if ev["type"] == "finding":
             findings.append(Finding(**ev["finding"]))
 
@@ -108,10 +74,14 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
         with db.session() as s:
             run = s.get(repo.m.Run, run_id)
             for f in findings:
-                repo.add_observation(s, run, f)
+                repo.add_observation(s, run, f,
+                                     reliability=float(f.data.get("source_reliability", 0.5)))
+            repo.persist_graph(s, run, engine.artifacts, engine.edges)
             repo.finish_run(s, run, "done", {
                 "total": len(findings),
                 "hits": sum(1 for f in findings if f.is_hit),
+                "artifacts": len(engine.artifacts),
+                "stop_reason": engine.stop_reason,
             })
         # Correlate + diff in their own transactions.
         entities = correlate_run(db, run_id)
@@ -125,4 +95,7 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
         "findings": findings,
         "summary": summary,
         "changes": changes,
+        "artifacts": engine.artifacts,
+        "edges": engine.edges,
+        "stop_reason": engine.stop_reason,
     }

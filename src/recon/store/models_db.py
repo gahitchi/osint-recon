@@ -185,3 +185,37 @@ class ChangeEvent(Base):
     label: Mapped[Optional[str]] = mapped_column(String(200))
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class ArtifactNode(Base):
+    """A typed data point discovered during a recursive scan (a node in the
+    discovery graph). Distinct from `Entity`: this records *what was found and
+    how we got there* during a run, not a resolved identity cluster."""
+
+    __tablename__ = "artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("targets.id"), index=True)
+    type: Mapped[str] = mapped_column(String(40), index=True)
+    value: Mapped[str] = mapped_column(Text)
+    normalized: Mapped[str] = mapped_column(String(400), index=True)
+    depth: Mapped[int] = mapped_column(Integer, default=0)
+    source_module: Mapped[str] = mapped_column(String(60), default="seed")
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class ArtifactEdge(Base):
+    """A discovery-provenance edge: artifact `src` led to artifact `dst` via a
+    module (parent -> child in the traversal)."""
+
+    __tablename__ = "artifact_edges"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    src_artifact_id: Mapped[int] = mapped_column(ForeignKey("artifacts.id"), index=True)
+    dst_artifact_id: Mapped[int] = mapped_column(ForeignKey("artifacts.id"), index=True)
+    module: Mapped[str] = mapped_column(String(60))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

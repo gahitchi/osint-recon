@@ -62,6 +62,37 @@ def set_cached(connector: str, query: Query, findings: list[Finding]) -> None:
                                expires_at=_now() + dt.timedelta(seconds=ttl)))
 
 
+# --- Generic key-based cache (used by the recursive engine's modules) -------
+# Modules are keyed by an artifact, not a whole Query, and a replayed module
+# must reproduce BOTH its findings AND the artifacts it emitted (so recursion
+# still proceeds on a cache hit). The payload therefore carries both lists.
+
+def get_cached_key(key: str) -> Optional[dict]:
+    """Return {"findings": [...], "artifacts": [...]} payload or None if absent/expired."""
+    db = get_db()
+    with db.session() as s:
+        entry = s.get(m.CacheEntry, key)
+        if not entry:
+            return None
+        if entry.expires_at and _aware(entry.expires_at) < _now():
+            return None
+        return entry.payload
+
+
+def set_cached_key(key: str, payload: dict) -> None:
+    db = get_db()
+    ttl = SETTINGS.cache_ttl_seconds
+    with db.session() as s:
+        entry = s.get(m.CacheEntry, key)
+        if entry:
+            entry.payload = payload
+            entry.created_at = _now()
+            entry.expires_at = _now() + dt.timedelta(seconds=ttl)
+        else:
+            s.add(m.CacheEntry(key=key, payload=payload, created_at=_now(),
+                               expires_at=_now() + dt.timedelta(seconds=ttl)))
+
+
 # --- Source reliability + circuit breaker ----------------------------------
 
 def _get_source(s, name: str, kind: str, prior: float) -> m.Source:
