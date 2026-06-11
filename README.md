@@ -107,6 +107,22 @@ RECON_SITES_FILE=data/wmn-data.json recon scan --username torvalds
 #   shodan = "..."   # also: virustotal, abuseipdb, github, hibp
 ```
 
+## What's new in v0.4 — the dashboard, made interactive
+
+The recursive engine of v0.3 produced a rich artifact graph but only exposed it as
+JSON. v0.4 makes it (and the keyless-first key model) **visible and operable from
+the browser** — no new dependencies, no CDN, no build step.
+
+| Capability | Where |
+|---|---|
+| **Discovery map**: a self-contained **force-directed** render of a run's artifact graph on `<canvas>` — drag nodes, scroll to zoom, pan, hover for type/value, click for provenance (depth · module · confidence). Nodes colored by artifact type. | `web/app.js` (`startSim`), `web/index.html` |
+| **Module catalogue**: every module the engine can dispatch — what it consumes/produces, keyless vs keyed, and whether it's currently **enabled** (keyless, or key present) | `GET /api/modules`, `web/` Modules & keys tab |
+| **API-key management**: set/clear the optional keys from the UI; stored locally in `keys.toml` (0600). Values are **never** returned by the API — only configured/source status. | `GET/POST /api/keys`, `keys.KeyVault` |
+
+```bash
+recon serve     # open http://127.0.0.1:8000 → Discovery map · Modules & keys tabs
+```
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

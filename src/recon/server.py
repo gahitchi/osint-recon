@@ -126,8 +126,8 @@ async def api_changes(target_id: int) -> JSONResponse:
 
 @app.get("/api/runs/{run_id}/graph")
 async def api_run_graph(run_id: int) -> JSONResponse:
-    """The discovery graph of a run: artifacts (nodes) + provenance edges. Phase 1
-    exposes the data; force-directed rendering lands in a later phase."""
+    """The discovery graph of a run: artifacts (nodes) + provenance edges,
+    rendered as the dashboard's interactive force-directed Discovery map."""
     with get_db().session() as s:
         arts = repo.list_artifacts(s, run_id)
         edges = repo.list_artifact_edges(s, run_id)

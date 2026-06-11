@@ -126,7 +126,14 @@ const TYPE_COLORS = {
   phone:"#e3b341", name:"#e3b341",
 };
 const typeColor = (t) => TYPE_COLORS[t] || "#8b93a7";
-let mapState = null;
+let mapState = null, lastGraph = null, resizeTimer = null;
+
+// Refit the canvas when the window resizes, while the map tab is showing one.
+window.addEventListener("resize", () => {
+  if (!lastGraph || !$("#panel-map").classList.contains("active")) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => startSim(lastGraph), 180);
+});
 
 async function loadMap() {
   const run = $("#map-run").value.trim();
@@ -155,6 +162,7 @@ function startSim(g){
   const cv=$("#map-canvas"), wrap=$("#map-wrap");
   const W=cv.width=wrap.clientWidth||900, H=cv.height=520, ctx=cv.getContext("2d");
   const byId=new Map();
+  lastGraph=g;
   const N=g.nodes.length;
   const nodes=g.nodes.slice(0,400).map((n,i)=>{ const a=(i/Math.max(1,N))*Math.PI*2;
     const node={...n, x:Math.cos(a)*140+(Math.random()*30-15), y:Math.sin(a)*140+(Math.random()*30-15),
@@ -253,7 +261,16 @@ async function loadKeys(){
   document.querySelectorAll(".clearkey").forEach(b=>b.onclick=()=>saveKey(b.dataset.key, ""));
 }
 async function saveKey(name, value){
-  await fetch("/api/keys", { method:"POST", headers:{"Content-Type":"application/json"},
-                             body: JSON.stringify({ name, value }) });
+  const st = $("#keys-status");
+  if (st) st.textContent = value ? `Saving ${name}…` : `Clearing ${name}…`;
+  try {
+    const r = await fetch("/api/keys", { method:"POST", headers:{"Content-Type":"application/json"},
+                                         body: JSON.stringify({ name, value }) });
+    const d = await r.json();
+    if (!r.ok) { if (st) st.textContent = `Error: ${d.error || r.status}`; return; }
+    if (st) st.textContent = d.configured ? `${name}: saved` : `${name}: cleared`;
+  } catch (e) {
+    if (st) st.textContent = `Error: ${e.message}`;
+  }
   loadKeys(); loadModules();
 }
