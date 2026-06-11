@@ -37,21 +37,62 @@ def _ver(pkg: str) -> str:
         return "unknown"
 
 
-def provenance() -> dict:
+def _thresholds(settings) -> dict:
+    return {
+        "baseline_similarity_reject": settings.baseline_similarity_reject,
+        "found_confidence": settings.found_confidence,
+        "uncertain_confidence": settings.uncertain_confidence,
+        "er_merge_threshold": settings.er_merge_threshold,
+        "er_review_threshold": settings.er_review_threshold,
+    }
+
+
+def provenance(settings=SETTINGS) -> dict:
+    """Run-level reproducibility stamp: the exact tool/dataset/thresholds/engine
+    settings a run was produced under."""
     return {
         "tool_version": __version__,
         "python": platform.python_version(),
         "platform": f"{platform.system()} {platform.release()}",
-        "deterministic": SETTINGS.deterministic,
-        "probe_seed": SETTINGS.probe_seed if SETTINGS.deterministic else None,
+        "deterministic": settings.deterministic,
+        "probe_seed": settings.probe_seed if settings.deterministic else None,
         "sites_dataset_sha256": sites_dataset_hash(),
-        "thresholds": {
-            "baseline_similarity_reject": SETTINGS.baseline_similarity_reject,
-            "found_confidence": SETTINGS.found_confidence,
-            "uncertain_confidence": SETTINGS.uncertain_confidence,
-            "er_merge_threshold": SETTINGS.er_merge_threshold,
-            "er_review_threshold": SETTINGS.er_review_threshold,
+        "thresholds": _thresholds(settings),
+        "engine": {
+            "scope_mode": settings.scope_mode,
+            "max_depth": settings.max_depth,
+            "max_artifacts": settings.max_artifacts,
+            "max_requests": settings.max_requests,
+            "passive_only": settings.passive_only,
+            "confidence_independence": settings.confidence_independence,
         },
         "dependencies": {pkg: _ver(pkg) for pkg in _TRACKED},
         "argv": " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "",
     }
+
+
+def finding_trace(*, module: str, source: str, rule=None, ev=None,
+                  baseline=None, settings=SETTINGS) -> dict:
+    """Compact, per-finding provenance: enough to trace a single confidence value
+    back to the exact inputs (dataset rule, baseline, thresholds, request) that
+    produced it. Deterministic given the same inputs (no wall-clock here — the run
+    carries `started_at` and the run-level provenance stamp)."""
+    tr: dict = {
+        "tool_version": __version__,
+        "module": module,
+        "source": source,
+        "deterministic": settings.deterministic,
+        "dataset_sha256": sites_dataset_hash(),
+        "thresholds": _thresholds(settings),
+    }
+    if rule is not None:
+        tr["site_rule"] = {"name": getattr(rule, "name", None),
+                           "error_type": getattr(rule, "error_type", None)}
+    if ev is not None:
+        tr["request"] = {"status": ev.status, "final_url": ev.final_url,
+                         "elapsed_ms": ev.elapsed_ms, "blocked": ev.blocked}
+    tr["baseline"] = None if baseline is None else {
+        "status": baseline.status, "fingerprint": baseline.fingerprint,
+        "blocked": baseline.blocked,
+    }
+    return tr

@@ -179,6 +179,20 @@ race on the per-source reliability row (now caught + retried) and missing
 columns on older local DBs (now backfilled idempotently on startup; WAL +
 busy_timeout enabled for the concurrent workload).
 
+## What's new in v0.6.1 — provenance & traceability
+
+Every confidence number can now be traced back to the exact inputs that produced
+it, and every run carries a reproducibility stamp.
+
+| Capability | Where |
+|---|---|
+| **Per-finding trace** — each verified finding records the dataset rule it used, the live request (status / final URL / latency / block), the absent-baseline it was judged against, the active thresholds, and the dataset SHA + tool version. Reproducible (no wall-clock). Shown as a "trace" disclosure per result; persisted on `observations.trace`. | `provenance.finding_trace`, `collectors/username.py` |
+| **Run provenance** — each persisted run stamps the tool/python/platform, deterministic seed, dataset hash, thresholds, **engine settings** (scope / depth / passive / independence), and dependency versions. Served at `GET /api/runs/{id}/provenance`, shown in the runs table, printed by `recon provenance --run N`, and already embedded in JSON exports. | `provenance.provenance(settings)`, `orchestrator.scan` |
+
+```bash
+recon provenance --run 1     # the reproducibility stamp for a run
+```
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

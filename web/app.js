@@ -75,11 +75,25 @@ function breakdownHtml(bd) {
     + `<span class="bd-row bd-total">= ${bd.total.toFixed(2)}</span>${shadow}</div></details>`;
 }
 
+function traceHtml(t) {
+  if (!t) return "";
+  const kv = [];
+  if (t.site_rule) kv.push(`rule: ${esc(t.site_rule.name)} (${esc(t.site_rule.error_type)})`);
+  if (t.request) kv.push(`request: HTTP ${t.request.status} → ${esc(t.request.final_url || "")}`
+    + (t.request.elapsed_ms ? ` (${t.request.elapsed_ms}ms)` : ""));
+  kv.push("baseline: " + (t.baseline ? `HTTP ${t.baseline.status}, fp ${esc((t.baseline.fingerprint || "").slice(0, 8))}` : "none"));
+  if (t.thresholds) kv.push(`thresholds: FOUND≥${t.thresholds.found_confidence}, UNCERTAIN≥${t.thresholds.uncertain_confidence}`);
+  kv.push(`dataset ${esc((t.dataset_sha256 || "").slice(0, 8))} · tool ${esc(t.tool_version)}`
+    + (t.deterministic ? " · deterministic" : ""));
+  return `<details class="why trace"><summary>trace</summary><div class="bd">`
+    + kv.map((x) => `<span class="bd-row">${x}</span>`).join("") + `</div></details>`;
+}
+
 function addRow(f) {
   const tr = document.createElement("tr");
   tr.className = f.verdict;
   const label = f.url ? `<a href="${f.url}" target="_blank" rel="noopener">${esc(f.label)}</a>` : esc(f.label);
-  const reasons = (f.reasons || []).map(esc).join("<br>") + breakdownHtml(f.breakdown);
+  const reasons = (f.reasons || []).map(esc).join("<br>") + breakdownHtml(f.breakdown) + traceHtml(f.trace);
   tr.innerHTML = `<td><span class="v ${f.verdict}">${f.verdict}</span></td><td>${f.confidence.toFixed(2)}</td>
     <td>${esc(f.source)}</td><td>${label}</td><td class="reasons">${reasons}</td>`;
   const tbody = $("#results").querySelector("tbody");
@@ -111,8 +125,23 @@ async function table(target, url, cols, mapRow) {
 const loadTargets = () => table("#targets", "/api/targets", ["id", "label", "watch", "query"],
   (t) => [t.id, esc(t.label||""), t.watchlist ? "✓" : "", esc(JSON.stringify(t.query))]);
 
-const loadRuns = () => table("#runs", "/api/runs", ["run", "target", "status", "stats"],
-  (r) => [r.id, r.target_id, r.status, esc(JSON.stringify(r.stats))]);
+const loadRuns = () => table("#runs", "/api/runs", ["run", "target", "status", "stats", "provenance"],
+  (r) => [r.id, r.target_id, r.status, esc(JSON.stringify(r.stats)), provenanceHtml(r.provenance)]);
+
+function provenanceHtml(p) {
+  if (!p) return "<span class='tag'>—</span>";
+  const e = p.engine || {};
+  const t = p.thresholds || {};
+  const rows = [
+    `tool ${esc(p.tool_version)} · py ${esc(p.python)}${p.deterministic ? " · deterministic" : ""}`,
+    `dataset sha ${esc((p.sites_dataset_sha256 || "").slice(0, 12))}`,
+    `engine: scope ${esc(e.scope_mode)} · depth ${e.max_depth} · ${e.passive_only ? "passive" : "active"}`
+      + ` · independence ${e.confidence_independence ? "on" : "shadow"}`,
+    `thresholds: FOUND≥${t.found_confidence} · merge ${t.er_merge_threshold}`,
+  ];
+  return `<details class="why"><summary>stamp</summary><div class="bd">`
+    + rows.map((x) => `<span class="bd-row">${x}</span>`).join("") + `</div></details>`;
+}
 
 const loadChanges = () => table("#changes", "/api/changes", ["when","kind","source","label","detail"],
   (c) => [c.created_at.replace("T"," ").slice(0,16), badge(c.kind), esc(c.source||""), esc(c.label||""), esc(JSON.stringify(c.detail))]);

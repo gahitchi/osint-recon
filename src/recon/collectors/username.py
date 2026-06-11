@@ -15,6 +15,7 @@ from typing import Awaitable, Callable
 from ..config import SETTINGS
 from ..http_client import RateLimitedClient
 from ..models import Finding, Query, SiteRule, Verdict
+from ..provenance import finding_trace
 from ..verify.baseline import BaselineCache, evidence_from_response
 from ..verify.verdict import decide
 
@@ -116,6 +117,8 @@ async def _check_site(
         confidence=conf,
         reasons=reasons,
         breakdown=breakdown,
+        trace=finding_trace(module="username", source=f"username:{rule.name}",
+                            rule=rule, ev=ev, baseline=base),
         signals=signals,
         data={"status": ev.status, "title": ev.title, "final_url": ev.final_url,
               "fingerprint": ev.fingerprint, "phase": phase},

@@ -115,6 +115,9 @@ class Finding(BaseModel):
     # Structured, auditable derivation of `confidence` (Phase 5a). Optional: not
     # every source produces a layered score (e.g. offline phone validation).
     breakdown: Optional[ScoreBreakdown] = None
+    # Per-finding provenance (Phase 5b): the inputs that produced this verdict
+    # (dataset rule, baseline, thresholds, request). Optional / best-effort.
+    trace: Optional[dict[str, Any]] = None
     # Strong identity signals for clustering (e.g. {"gravatar_hash": "..."}).
     signals: dict[str, str] = Field(default_factory=dict)
     data: dict[str, Any] = Field(default_factory=dict)

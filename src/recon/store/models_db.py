@@ -53,6 +53,7 @@ class Run(Base):
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
     stats: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    provenance: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
 
     target: Mapped[Target] = relationship(back_populates="runs")
     observations: Mapped[list["Observation"]] = relationship(back_populates="run")
@@ -76,6 +77,7 @@ class Observation(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
     breakdown: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    trace: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
     signals: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
     data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     fingerprint: Mapped[Optional[str]] = mapped_column(String(32), index=True)

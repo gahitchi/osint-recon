@@ -225,6 +225,33 @@ def _cmd_insights(args) -> int:
     return 0
 
 
+def _cmd_provenance(args) -> int:
+    """Print a run's reproducibility stamp (the inputs it was produced under)."""
+    import json
+
+    from .store import get_db, repo
+
+    db = get_db()
+    with db.session() as s:
+        run_id = args.run
+        if run_id is None:
+            runs = repo.list_runs(s, limit=1)
+            if not runs:
+                print("no runs yet", file=sys.stderr)
+                return 1
+            run_id = runs[0].id
+        run = s.get(repo.m.Run, run_id)
+        prov = run.provenance if run else None
+
+    if not prov:
+        print(f"run #{run_id}: no provenance recorded "
+              "(older run, or not a persisted scan)", file=sys.stderr)
+        return 0
+    print(f"run #{run_id} provenance:")
+    print(json.dumps(prov, indent=2, default=str))
+    return 0
+
+
 # --- main ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -257,6 +284,9 @@ def build_parser() -> argparse.ArgumentParser:
     ins = sub.add_parser("insights", help="print correlation-rule insights that fired on a run")
     ins.add_argument("--run", type=int, help="run id (defaults to the latest run)")
 
+    prov = sub.add_parser("provenance", help="print the reproducibility stamp of a run")
+    prov.add_argument("--run", type=int, help="run id (defaults to the latest run)")
+
     sub.add_parser("serve", help="launch the local web dashboard + API")
     wk = sub.add_parser("worker", help="process queued scan jobs")
     wk.add_argument("--once", action="store_true", help="drain the queue then exit")
@@ -285,6 +315,8 @@ def main() -> None:
         raise SystemExit(_cmd_graph(args))
     if cmd == "insights":
         raise SystemExit(_cmd_insights(args))
+    if cmd == "provenance":
+        raise SystemExit(_cmd_provenance(args))
     if cmd == "serve":
         from .server import main as serve_main
         serve_main()

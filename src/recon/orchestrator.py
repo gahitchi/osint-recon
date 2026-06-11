@@ -49,6 +49,7 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
     """
     from .correlate.graph import correlate_run
     from .monitor.diff import diff_run
+    from .provenance import provenance
     from .rules import evaluate, load_rules
     from .store import get_db, repo
 
@@ -82,6 +83,7 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
                                      reliability=float(f.data.get("source_reliability", 0.5)))
             repo.persist_graph(s, run, engine.artifacts, engine.edges)
             repo.persist_rule_findings(s, run, insights)
+            run.provenance = provenance(settings)
             repo.finish_run(s, run, "done", {
                 "total": len(findings),
                 "hits": sum(1 for f in findings if f.is_hit),

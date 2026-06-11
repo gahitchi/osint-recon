@@ -32,7 +32,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.6.0")
+app = FastAPI(title="osint-recon", version="0.6.1")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -91,10 +91,22 @@ async def api_runs(target_id: int | None = None) -> JSONResponse:
         rows = repo.list_runs(s, target_id=target_id)
         return JSONResponse([
             {**_row(r, ("id", "target_id", "status")), "stats": r.stats,
+             "provenance": r.provenance,
              "started_at": r.started_at.isoformat(),
              "finished_at": r.finished_at.isoformat() if r.finished_at else None}
             for r in rows
         ])
+
+
+@app.get("/api/runs/{run_id}/provenance")
+async def api_run_provenance(run_id: int) -> JSONResponse:
+    """Run-level reproducibility stamp: tool/dataset/thresholds/engine settings the
+    run was produced under (Phase 5b)."""
+    with get_db().session() as s:
+        run = s.get(repo.m.Run, run_id)
+        if run is None:
+            return JSONResponse({"error": f"run {run_id} not found"}, status_code=404)
+        return JSONResponse({"run_id": run_id, "provenance": run.provenance})
 
 
 @app.get("/api/targets/{target_id}/entities")
