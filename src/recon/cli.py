@@ -71,6 +71,12 @@ async def _cmd_scan(args) -> int:
     for f in findings:
         if args.all or f.is_notable:
             print(_line(f))
+            if args.explain and f.breakdown:
+                bd = f.breakdown
+                print(f"           base {bd.base:+.2f}", file=sys.stderr)
+                for c in bd.contributions:
+                    print(f"           {c.delta:+.2f}  {c.term}: {c.reason}", file=sys.stderr)
+                print(f"           = {bd.total:.2f}", file=sys.stderr)
 
     summary = result["summary"]
     if summary.get("clusters"):
@@ -229,6 +235,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_identifier_args(sc)
     sc.add_argument("--label")
     sc.add_argument("--all", action="store_true", help="also print NOT_FOUND/ERROR")
+    sc.add_argument("--explain", action="store_true",
+                    help="print the score breakdown (per-term contributions) under each finding")
     sc.add_argument("--watch", metavar="CRON", help="add target to watchlist on this cron")
     sc.add_argument("--format", choices=["json", "csv", "pdf"])
     sc.add_argument("--out")

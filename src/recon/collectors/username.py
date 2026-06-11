@@ -96,7 +96,7 @@ async def _check_site(
             reasons=[f"request failed: {e}"],
         )
 
-    verdict, conf, reasons = decide(rule, ev, body, base)
+    verdict, conf, reasons, breakdown = decide(rule, ev, body, base)
     signals: dict[str, str] = {}
     if verdict == Verdict.FOUND:
         signals[f"username:{rule.name.lower()}"] = account
@@ -115,6 +115,7 @@ async def _check_site(
         verdict=verdict,
         confidence=conf,
         reasons=reasons,
+        breakdown=breakdown,
         signals=signals,
         data={"status": ev.status, "title": ev.title, "final_url": ev.final_url,
               "fingerprint": ev.fingerprint, "phase": phase},

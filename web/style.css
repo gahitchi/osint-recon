@@ -59,6 +59,15 @@ footer { margin-top:30px; color:var(--mut); }
   background:rgba(13,17,23,.92); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; }
 .map-detail pre { white-space:pre-wrap; word-break:break-all; color:var(--mut); font-size:11px; margin:6px 0 0; }
 
+/* score breakdown ("why N") */
+details.why { margin-top:4px; }
+details.why summary { cursor:pointer; color:var(--mut); font-size:11px; user-select:none; }
+details.why .bd { margin:4px 0 2px; padding:6px 8px; background:#0b0d12; border:1px solid var(--line);
+  border-radius:6px; font-size:11px; line-height:1.5; }
+.bd-row { display:block; color:var(--mut); }
+.bd-total { color:var(--fg); border-top:1px solid var(--line); margin-top:3px; padding-top:3px; }
+.bd-shadow { display:block; margin-top:4px; color:#d2a8ff; }
+
 /* modules & keys */
 code { background:#161a22; padding:1px 5px; border-radius:4px; }
 #keys button, #modules button { margin-top:0; }

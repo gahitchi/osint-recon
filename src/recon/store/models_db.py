@@ -75,6 +75,7 @@ class Observation(Base):
     verdict: Mapped[str] = mapped_column(String(20), index=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    breakdown: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
     signals: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
     data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     fingerprint: Mapped[Optional[str]] = mapped_column(String(32), index=True)
@@ -94,6 +95,7 @@ class Entity(Base):
     label: Mapped[Optional[str]] = mapped_column(String(200))
     attributes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # canonical signals
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    breakdown: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
     flags: Mapped[list[str]] = mapped_column(JSON, default=list)  # contradictions, review, etc.
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[dt.datetime] = mapped_column(

@@ -126,8 +126,10 @@ def correlate_run(db, run_id: int) -> dict:
             canonical = _resolve_conflicts(recs, cl_obs)
             if canonical:
                 attrs["_canonical"] = canonical  # winning value per conflicted id
-            conf = confidence.entity_confidence(cl_obs, flags)
-            ent = m.Entity(label=_label(attrs), attributes=attrs, confidence=conf, flags=flags)
+            bd = confidence.entity_confidence(cl_obs, flags)
+            conf = bd.total
+            ent = m.Entity(label=_label(attrs), attributes=attrs, confidence=conf,
+                           breakdown=bd.model_dump(), flags=flags)
             s.add(ent)
             s.flush()
             for k in idxs:
@@ -137,6 +139,8 @@ def correlate_run(db, run_id: int) -> dict:
                 "id": ent.id,
                 "label": ent.label,
                 "score": conf,
+                "confidence_shadow": bd.shadow_total,
+                "breakdown": bd.model_dump(),
                 "signals": attrs,
                 "flags": flags,
                 "found": sum(1 for o in cl_obs if o.verdict == "FOUND"),

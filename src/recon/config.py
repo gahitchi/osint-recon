@@ -28,6 +28,10 @@ class Settings:
     found_confidence: float = 0.75
     # Below found_confidence but at/above this -> UNCERTAIN (shown, flagged).
     uncertain_confidence: float = 0.40
+    # When True, corroboration breadth is weighted by *independent source classes*
+    # rather than distinct source names (see trust/independence.py). Ships False
+    # in Phase 5a (shadow-only); flipped on once calibration validates it.
+    confidence_independence: bool = False
 
     # Random control-probe username: prefix + this many random chars.
     control_probe_len: int = 18

@@ -10,6 +10,8 @@ import hashlib
 import json
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from ..config import SETTINGS
 from ..models import Finding, Query
 from ..store import get_db
@@ -97,10 +99,23 @@ def set_cached_key(key: str, payload: dict) -> None:
 
 def _get_source(s, name: str, kind: str, prior: float) -> m.Source:
     src = s.get(m.Source, name)
-    if not src:
-        src = m.Source(name=name, kind=kind, reliability=prior)
-        s.add(src)
+    if src:
+        return src
+    # The recursive engine runs sibling modules concurrently; on first encounter
+    # of a source two threads can race to INSERT the same row. The loser hits a
+    # UNIQUE violation — catch it, roll back, and read the winner's row instead of
+    # letting the exception abort the module mid-flight.
+    src = m.Source(name=name, kind=kind, reliability=prior)
+    s.add(src)
+    try:
         s.flush()
+    except IntegrityError:
+        s.rollback()
+        src = s.get(m.Source, name)
+        if src is None:  # extremely unlikely (writer not yet committed) — retry
+            src = m.Source(name=name, kind=kind, reliability=prior)
+            s.add(src)
+            s.flush()
     return src
 
 

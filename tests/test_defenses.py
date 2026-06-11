@@ -35,7 +35,7 @@ def test_blocked_response_is_unverifiable_not_found():
     """A 200 challenge page that contains the username must NOT become FOUND."""
     rule = SiteRule(name="S", uri_check="https://s/u/{account}", error_type="status_code")
     ev = _ev(200, "Just a moment... checking your browser", blocked="Cloudflare bot-challenge")
-    verdict, conf, reasons = decide(rule, ev, "Just a moment...", baseline=None)
+    verdict, conf, reasons, _ = decide(rule, ev, "Just a moment...", baseline=None)
     assert verdict == Verdict.UNVERIFIABLE
     assert conf == 0.0
     assert any("Cloudflare" in r for r in reasons)
@@ -45,5 +45,5 @@ def test_blocked_baseline_makes_target_unverifiable():
     rule = SiteRule(name="S", uri_check="https://s/u/{account}", error_type="status_code")
     base = _ev(403, "Access denied", blocked="WAF/anti-bot block", url="https://s/u/zz")
     ev = _ev(200, "<h1>alice</h1>")
-    verdict, _, reasons = decide(rule, ev, "<h1>alice</h1>", baseline=base)
+    verdict, _, reasons, _ = decide(rule, ev, "<h1>alice</h1>", baseline=base)
     assert verdict == Verdict.UNVERIFIABLE

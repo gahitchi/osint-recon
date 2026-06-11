@@ -61,12 +61,27 @@ $("#save").addEventListener("click", async () => {
   renderSummary(d.summary);
 });
 
+function breakdownHtml(bd) {
+  if (!bd || !bd.contributions) return "";
+  const sign = (d) => (d >= 0 ? "+" : "") + d.toFixed(2);
+  const rows = bd.contributions
+    .map((c) => `<span class="bd-row">${sign(c.delta)} <b>${esc(c.term)}</b> — ${esc(c.reason)}</span>`).join("");
+  let shadow = "";
+  if (bd.shadow_total != null && bd.shadow_total !== bd.total)
+    shadow = `<span class="bd-shadow">independence-adjusted: ${bd.shadow_total.toFixed(2)}`
+      + (bd.shadow_note ? ` — ${esc(bd.shadow_note)}` : "") + `</span>`;
+  return `<details class="why"><summary>why ${bd.total.toFixed(2)}</summary>`
+    + `<div class="bd"><span class="bd-row">base ${bd.base.toFixed(2)}</span>${rows}`
+    + `<span class="bd-row bd-total">= ${bd.total.toFixed(2)}</span>${shadow}</div></details>`;
+}
+
 function addRow(f) {
   const tr = document.createElement("tr");
   tr.className = f.verdict;
   const label = f.url ? `<a href="${f.url}" target="_blank" rel="noopener">${esc(f.label)}</a>` : esc(f.label);
+  const reasons = (f.reasons || []).map(esc).join("<br>") + breakdownHtml(f.breakdown);
   tr.innerHTML = `<td><span class="v ${f.verdict}">${f.verdict}</span></td><td>${f.confidence.toFixed(2)}</td>
-    <td>${esc(f.source)}</td><td>${label}</td><td class="reasons">${(f.reasons||[]).map(esc).join("<br>")}</td>`;
+    <td>${esc(f.source)}</td><td>${label}</td><td class="reasons">${reasons}</td>`;
   const tbody = $("#results").querySelector("tbody");
   const rows = [...tbody.children];
   const idx = rows.findIndex((row) => order[row.className] > order[f.verdict]);

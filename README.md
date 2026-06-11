@@ -154,6 +154,31 @@ recon serve                           # dashboard "Insights" tab + rule catalogu
 Insights are persisted (`rule_findings`) and served at
 `GET /api/runs/{id}/rules`; the catalogue is `GET /api/rules`.
 
+## What's new in v0.6 — confidence you can trust
+
+This release invests in *trust* in the confidence number rather than the
+formula's sophistication: you can see exactly how a score was built, and a
+long-standing way the score over-counted corroboration is now measured.
+
+| Capability | Where |
+|---|---|
+| **Score explainability** — every confidence is an auditable `ScoreBreakdown`: a base prior plus signed, named contributions (`+0.20 status_vs_baseline`, `-0.50 soft404_reject`, …) that sum to the total. Shown in the dashboard ("why 0.85"), `recon scan --explain`, and JSON exports. | `src/recon/explain.py`, `verify/verdict.py`, `correlate/confidence.py` |
+| **Source-independence tracking** — corroboration breadth counted distinct source *names*, so three RIR-derived modules (Team Cymru, RIPEstat, ip-api) inflated confidence. Sources now map to *independence classes*; breadth over distinct classes is computed and shown as an `independence-adjusted` shadow score. | `src/recon/trust/independence.py` |
+| **Shadow-first rollout** — the independence weighting is *displayed* but does not change the official score until calibration validates it (`Settings.confidence_independence`, default off). | `config.py` |
+
+```bash
+recon scan --username torvalds --explain    # per-term breakdown under each finding
+```
+
+Independence classes are declarative and overridable via `RECON_INDEPENDENCE_FILE`.
+Breakdowns persist on `observations.breakdown` / `entities.breakdown`.
+
+**Robustness fixes that shipped with it:** the recursive engine runs sibling
+modules concurrently, which exposed two latent SQLite issues — a get-or-create
+race on the per-source reliability row (now caught + retried) and missing
+columns on older local DBs (now backfilled idempotently on startup; WAL +
+busy_timeout enabled for the concurrent workload).
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

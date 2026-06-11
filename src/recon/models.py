@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from .explain import ScoreBreakdown
+
 
 class Verdict(str, enum.Enum):
     FOUND = "FOUND"
@@ -110,6 +112,9 @@ class Finding(BaseModel):
     verdict: Verdict
     confidence: float = 0.0
     reasons: list[str] = Field(default_factory=list)
+    # Structured, auditable derivation of `confidence` (Phase 5a). Optional: not
+    # every source produces a layered score (e.g. offline phone validation).
+    breakdown: Optional[ScoreBreakdown] = None
     # Strong identity signals for clustering (e.g. {"gravatar_hash": "..."}).
     signals: dict[str, str] = Field(default_factory=dict)
     data: dict[str, Any] = Field(default_factory=dict)

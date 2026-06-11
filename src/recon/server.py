@@ -32,7 +32,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.5.0")
+app = FastAPI(title="osint-recon", version="0.6.0")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -103,7 +103,8 @@ async def api_entities(target_id: int) -> JSONResponse:
         ents = repo.list_entities(s, target_id)
         return JSONResponse([
             {**_row(e, ("id", "label", "confidence")), "attributes": e.attributes,
-             "flags": e.flags,
+             "flags": e.flags, "breakdown": e.breakdown,
+             "confidence_shadow": (e.breakdown or {}).get("shadow_total"),
              "sources": sorted({o.source for o in e.observations})}
             for e in ents
         ])
