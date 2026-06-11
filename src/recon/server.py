@@ -32,7 +32,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.7.0")
+app = FastAPI(title="osint-recon", version="0.7.1")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -196,6 +196,15 @@ async def api_calibration() -> JSONResponse:
         ]
         latest = rows[0].report if rows else None
         return JSONResponse({"latest": latest, "history": history})
+
+
+@app.get("/api/analytics")
+async def api_analytics() -> JSONResponse:
+    """Confidence analytics (Phase 5d): verdict mix, confidence distribution,
+    the signals that drive scores, source health, independence coverage, and
+    calibration drift — aggregated across all persisted observations."""
+    from . import analytics
+    return JSONResponse(analytics.compute(get_db()))
 
 
 @app.get("/api/sources")

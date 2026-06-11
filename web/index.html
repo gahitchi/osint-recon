@@ -19,6 +19,7 @@
     <button data-tab="graph">Identity graph</button>
     <button data-tab="map">Discovery map</button>
     <button data-tab="insights">Insights</button>
+    <button data-tab="confidence">Confidence</button>
     <button data-tab="sources">Source health</button>
     <button data-tab="keys">Modules &amp; keys</button>
   </nav>
@@ -111,6 +112,21 @@
     <div id="calibration"></div>
     <h2>Rule catalogue</h2>
     <div id="rulecat"></div>
+  </section>
+
+  <!-- CONFIDENCE ANALYTICS -->
+  <section class="panel" id="panel-confidence">
+    <h2>Confidence analytics</h2>
+    <p class="tag">How confident is the engine, what drives those scores, and is it
+    staying calibrated — aggregated across all stored observations.</p>
+    <div id="conf-summary"></div>
+    <div class="conf-grid">
+      <div><h3 class="tag">Confidence distribution</h3><canvas id="conf-hist" width="420" height="200"></canvas></div>
+      <div><h3 class="tag">Calibration drift (Brier ↓ / ECE ↓)</h3><canvas id="conf-drift" width="420" height="200"></canvas></div>
+    </div>
+    <h3 class="tag">Verdict mix</h3><div id="conf-verdicts"></div>
+    <h3 class="tag">Top score signals</h3><div id="conf-terms"></div>
+    <h3 class="tag">Source health (lowest reliability first)</h3><div id="conf-sources"></div>
   </section>
 
   <!-- SOURCES -->

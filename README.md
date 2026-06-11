@@ -215,6 +215,27 @@ It **suggests**, it never auto-tunes — thresholds stay a human decision. On th
 shipped labels the engine scores Brier ≈ 0.00 / ECE ≈ 0.02 with a 0% false-positive
 rate at FOUND≥0.75, confirming the threshold is well-placed.
 
+## What's new in v0.7.1 — confidence analytics
+
+A **Confidence** dashboard tab (and `recon analytics`) aggregates the trust
+signals the tool already records into a few honest views — the last piece of the
+"trust the score" arc.
+
+| View | What it answers |
+|---|---|
+| **Confidence distribution** + **verdict mix** | How decisive is the engine, and how often does it honestly say UNVERIFIABLE rather than guess? |
+| **Top score signals** | Which `ScoreBreakdown` terms drive confidence across the corpus, and their mean effect (e.g. `soft404_reject −0.50`, `query_in_body +0.20`). |
+| **Independence coverage** | Distinct source *names* vs independent *classes* — the corroboration-inflation factor (1.0× = no over-counting). |
+| **Source health** | Per-source reliability / successes / failures / breaker, worst first. |
+| **Calibration drift** | Brier / ECE across calibration runs — is the engine staying calibrated over time? |
+
+```bash
+recon analytics      # text summary; the dashboard renders charts (no CDN/deps)
+```
+
+Charts are drawn on a plain `<canvas>` — no external JS. Aggregations live in
+`src/recon/analytics.py` (pure, tested) and are served at `GET /api/analytics`.
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

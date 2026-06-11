@@ -291,6 +291,34 @@ async def _cmd_calibrate(args) -> int:
     return 0
 
 
+def _cmd_analytics(args) -> int:
+    """Print confidence analytics aggregated over all stored observations."""
+    from . import analytics
+    from .store import get_db
+
+    a = analytics.compute(get_db())
+    if not a["n_observations"]:
+        print("no observations yet — run a saved scan first", file=sys.stderr)
+        return 0
+    print(f"Confidence analytics over {a['n_observations']} observation(s)")
+    mix = a["verdict_mix"]
+    print("  verdicts: " + " · ".join(f"{k} {v}" for k, v in sorted(mix.items())))
+    print("  confidence distribution:")
+    for b in a["confidence_histogram"]:
+        if b["count"]:
+            print(f"   [{b['lo']:.1f}-{b['hi']:.1f}] {'#' * b['count']} {b['count']}")
+    ic = a["independence_coverage"]
+    print(f"  corroboration: {ic['distinct_sources']} source(s) → "
+          f"{ic['distinct_classes']} independent class(es) (inflation {ic['inflation']}×)")
+    if a["top_terms"]:
+        print("  top score signals: " + ", ".join(
+            f"{t['term']}({t['count']}, {t['mean_delta']:+.2f})" for t in a["top_terms"][:5]))
+    if a["calibration_drift"]:
+        last = a["calibration_drift"][-1]
+        print(f"  latest calibration: Brier {last['brier']} · ECE {last['ece']} (n={last['n']})")
+    return 0
+
+
 # --- main ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -330,6 +358,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="measure whether the confidence score is calibrated (vs labels)")
     cal.add_argument("--bins", type=int, default=10, help="reliability-diagram bins")
 
+    sub.add_parser("analytics", help="confidence analytics across all stored observations")
+
     sub.add_parser("serve", help="launch the local web dashboard + API")
     wk = sub.add_parser("worker", help="process queued scan jobs")
     wk.add_argument("--once", action="store_true", help="drain the queue then exit")
@@ -362,6 +392,8 @@ def main() -> None:
         raise SystemExit(_cmd_provenance(args))
     if cmd == "calibrate":
         raise SystemExit(asyncio.run(_cmd_calibrate(args)))
+    if cmd == "analytics":
+        raise SystemExit(_cmd_analytics(args))
     if cmd == "serve":
         from .server import main as serve_main
         serve_main()

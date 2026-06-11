@@ -68,6 +68,12 @@ details.why .bd { margin:4px 0 2px; padding:6px 8px; background:#0b0d12; border:
 .bd-total { color:var(--fg); border-top:1px solid var(--line); margin-top:3px; padding-top:3px; }
 .bd-shadow { display:block; margin-top:4px; color:#d2a8ff; }
 
+/* confidence analytics */
+.conf-grid { display:flex; flex-wrap:wrap; gap:18px; margin:8px 0; }
+.conf-grid canvas { background:#0b0d12; border:1px solid var(--line); border-radius:8px; max-width:100%; }
+.vmix { display:flex; align-items:center; gap:8px; margin:3px 0; }
+.vmix .bar { flex:1; max-width:300px; }
+
 /* modules & keys */
 code { background:#161a22; padding:1px 5px; border-radius:4px; }
 #keys button, #modules button { margin-top:0; }

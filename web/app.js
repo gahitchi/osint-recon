@@ -13,6 +13,7 @@ document.querySelectorAll("#tabs button").forEach((b) => {
     if (b.dataset.tab === "timeline") loadChanges();
     if (b.dataset.tab === "sources") loadSources();
     if (b.dataset.tab === "insights") { loadInsights(); loadRuleCatalogue(); loadCalibration(); }
+    if (b.dataset.tab === "confidence") loadAnalytics();
     if (b.dataset.tab === "keys") { loadKeys(); loadModules(); }
   });
 });
@@ -305,6 +306,79 @@ async function loadKeys(){
     saveKey(b.dataset.key, document.querySelector(`input[data-key="${b.dataset.key}"]`).value));
   document.querySelectorAll(".clearkey").forEach(b=>b.onclick=()=>saveKey(b.dataset.key, ""));
 }
+// --- Confidence analytics (self-contained canvas charts; no deps) ----------
+function barChart(id, labels, values, color) {
+  const cv = $("#" + id); if (!cv) return;
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 24;
+  ctx.clearRect(0, 0, W, H);
+  const max = Math.max(1, ...values), n = values.length;
+  const bw = (W - pad * 2) / n;
+  ctx.strokeStyle = "rgba(139,147,167,.3)"; ctx.beginPath();
+  ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad, H - pad); ctx.stroke();
+  ctx.fillStyle = color || "#58a6ff"; ctx.font = "9px system-ui";
+  values.forEach((v, i) => {
+    const h = (v / max) * (H - pad * 2), x = pad + i * bw + 2;
+    ctx.fillStyle = color || "#58a6ff";
+    ctx.fillRect(x, H - pad - h, bw - 4, h);
+    ctx.fillStyle = "#8b949e";
+    if (v) ctx.fillText(String(v), x, H - pad - h - 2);
+    ctx.fillText(labels[i], x, H - pad + 10);
+  });
+}
+
+function lineChart(id, series) {
+  // series: [{label, points:[y...], color}], shared x by index, y in [0,1]
+  const cv = $("#" + id); if (!cv) return;
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 24;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(139,147,167,.3)"; ctx.beginPath();
+  ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad, H - pad); ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad); ctx.stroke();
+  const n = Math.max(1, ...series.map(s => s.points.length));
+  const dx = n > 1 ? (W - pad * 2) / (n - 1) : 0;
+  const y = (v) => H - pad - Math.max(0, Math.min(1, v)) * (H - pad * 2);
+  series.forEach((s, si) => {
+    ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    s.points.forEach((v, i) => { const X = pad + i * dx; i ? ctx.lineTo(X, y(v)) : ctx.moveTo(X, y(v)); });
+    ctx.stroke();
+    s.points.forEach((v, i) => { ctx.beginPath(); ctx.arc(pad + i * dx, y(v), 2.5, 0, 6.29); ctx.fill(); });
+    ctx.fillText(s.label, pad + 4, pad + 12 + si * 12);
+  });
+}
+
+async function loadAnalytics() {
+  const a = await (await fetch("/api/analytics")).json();
+  if (!a.n_observations) { $("#conf-summary").innerHTML = "<p class='tag'>No observations yet — run a saved scan.</p>"; return; }
+  const ic = a.independence_coverage;
+  $("#conf-summary").innerHTML = `<div class="cluster">${a.n_observations} observations · `
+    + `corroboration ${ic.distinct_sources} source(s) → <b>${ic.distinct_classes}</b> independent class(es) `
+    + `<span class="bd-shadow">(inflation ${ic.inflation}×)</span></div>`;
+
+  const h = a.confidence_histogram;
+  barChart("conf-hist", h.map(b => b.lo.toFixed(1)), h.map(b => b.count), "#3fb950");
+
+  const drift = a.calibration_drift;
+  if (drift.length) lineChart("conf-drift", [
+    { label: "Brier", color: "#f0883e", points: drift.map(d => d.brier) },
+    { label: "ECE", color: "#bc8cff", points: drift.map(d => d.ece) },
+  ]);
+
+  const mix = a.verdict_mix, total = Object.values(mix).reduce((x, y) => x + y, 0) || 1;
+  $("#conf-verdicts").innerHTML = Object.entries(mix).sort((x, y) => y[1] - x[1]).map(([v, c]) =>
+    `<div class="vmix"><span class="v ${v}">${v}</span> <span class="bar"><span style="width:${Math.round(c / total * 100)}%"></span></span> ${c}</div>`).join("");
+
+  $("#conf-terms").innerHTML = a.top_terms.length
+    ? "<table><thead><tr><th>signal</th><th>count</th><th>mean Δ</th></tr></thead><tbody>"
+      + a.top_terms.map(t => `<tr><td>${esc(t.term)}</td><td>${t.count}</td><td>${t.mean_delta >= 0 ? "+" : ""}${t.mean_delta.toFixed(2)}</td></tr>`).join("")
+      + "</tbody></table>"
+    : "<p class='tag'>No score breakdowns recorded yet.</p>";
+
+  $("#conf-sources").innerHTML = a.source_health.length
+    ? "<table><thead><tr><th>source</th><th>kind</th><th>reliability</th><th>ok</th><th>fail</th><th>breaker</th></tr></thead><tbody>"
+      + a.source_health.map(s => `<tr><td>${esc(s.name)}</td><td>${esc(s.kind || "")}</td><td>${bar(s.reliability)}</td><td>${s.successes}</td><td>${s.failures}</td><td>${badge(s.breaker_state)}</td></tr>`).join("")
+      + "</tbody></table>"
+    : "<p class='tag'>No source health yet.</p>";
+}
+
 // --- Insights (correlation-rule findings) ----------------------------------
 const SEV_CLASS = { high:"FOUND", medium:"UNCERTAIN", low:"UNVERIFIABLE", info:"NOT_FOUND" };
 const sevBadge = (s) => `<span class="v ${SEV_CLASS[s]||"NOT_FOUND"}">${esc(s)}</span>`;
