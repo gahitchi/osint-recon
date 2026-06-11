@@ -193,6 +193,28 @@ it, and every run carries a reproducibility stamp.
 recon provenance --run 1     # the reproducibility stamp for a run
 ```
 
+## What's new in v0.7 — calibration tooling
+
+Explainability tells you *how* a score was built; calibration tells you whether
+to *believe* it. `recon calibrate` measures the verify engine against
+ground-truth labels and answers the question that matters: when it says 0.8, is
+the account actually there ~80% of the time?
+
+| Capability | Where |
+|---|---|
+| **Calibration metrics** (pure, tested): reliability diagram, **Brier score**, **ECE/MCE**, confusion + **false-positive rate at the FOUND threshold**, and a non-binding threshold **suggestion**. | `src/recon/calibrate/metrics.py` |
+| **Ground truth**: a small curated `data/calibration_labels.json` of confirmed present/absent `(account, site)` pairs (extend via `RECON_CALIBRATION_FILE`); the control-probe baselines the engine already builds are free known-negatives. | `calibrate/labels.py` |
+| **Runner**: drives the *real* verify pipeline over the labels (evaluator is injectable, so the metrics stay offline-testable). Persists to `calibration_runs`; served at `GET /api/calibration`; shown in the dashboard's Insights tab. | `calibrate/runner.py` |
+| **Independence flip, validated**: calibration reports how many stored entities the source-independence (shadow) weighting would change — so flipping `confidence_independence` on is a data-informed decision, never automatic. | `calibrate/runner.independence_impact` |
+
+```bash
+recon calibrate        # reliability diagram + Brier/ECE + FP-rate + suggestion
+```
+
+It **suggests**, it never auto-tunes — thresholds stay a human decision. On the
+shipped labels the engine scores Brier ≈ 0.00 / ECE ≈ 0.02 with a 0% false-positive
+rate at FOUND≥0.75, confirming the threshold is well-placed.
+
 ## What it does
 
 Give it any of: **username, email, phone, domain, real name.** It runs every

@@ -236,3 +236,21 @@ def list_rule_findings(s: Session, run_id: int) -> list[m.RuleFinding]:
         select(m.RuleFinding).where(m.RuleFinding.run_id == run_id)
         .order_by(m.RuleFinding.id)
     ).scalars().all())
+
+
+def save_calibration(s: Session, report: dict) -> m.CalibrationRun:
+    row = m.CalibrationRun(
+        n=report.get("n", 0), positives=report.get("positives", 0),
+        negatives=report.get("negatives", 0), brier=report.get("brier", 0.0),
+        ece=report.get("ece", 0.0),
+        found_threshold=report.get("found_threshold", 0.0), report=report,
+    )
+    s.add(row)
+    s.flush()
+    return row
+
+
+def list_calibration(s: Session, limit: int = 20) -> list[m.CalibrationRun]:
+    return list(s.execute(
+        select(m.CalibrationRun).order_by(m.CalibrationRun.id.desc()).limit(limit)
+    ).scalars().all())

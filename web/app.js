@@ -12,7 +12,7 @@ document.querySelectorAll("#tabs button").forEach((b) => {
     if (b.dataset.tab === "investigations") { loadTargets(); loadRuns(); }
     if (b.dataset.tab === "timeline") loadChanges();
     if (b.dataset.tab === "sources") loadSources();
-    if (b.dataset.tab === "insights") { loadInsights(); loadRuleCatalogue(); }
+    if (b.dataset.tab === "insights") { loadInsights(); loadRuleCatalogue(); loadCalibration(); }
     if (b.dataset.tab === "keys") { loadKeys(); loadModules(); }
   });
 });
@@ -328,6 +328,29 @@ async function loadInsights(){
            `<br><small>${esc(h.description)}</small>`+
            (ev ? `<div class="map-legend">${ev}</div>` : "")+`</div>`;
   }).join("");
+}
+
+async function loadCalibration(){
+  const d = await (await fetch("/api/calibration")).json();
+  const r = d.latest;
+  if (!r || !r.n) { $("#calibration").innerHTML = "<p class='tag'>No calibration runs yet — run <code>recon calibrate</code>.</p>"; return; }
+  const bins = (r.bins || []).filter(b => b.count).map(b => {
+    const w = Math.round((b.empirical || 0) * 100);
+    return `<tr><td>${b.lo.toFixed(1)}–${b.hi.toFixed(1)}</td><td>${b.count}</td>`
+      + `<td>${b.mean_pred.toFixed(2)}</td><td>${b.empirical.toFixed(2)}</td>`
+      + `<td><span class="bar"><span style="width:${w}%"></span></span></td></tr>`;
+  }).join("");
+  const cf = r.confusion_found || {};
+  const imp = r.independence_impact;
+  $("#calibration").innerHTML =
+    `<div class="cluster"><b>Brier ${r.brier}</b> · ECE ${r.ece} · MCE ${r.mce} · `
+    + `n=${r.n} (${r.positives}+/${r.negatives}-)<br>`
+    + `<small>at FOUND≥${r.found_threshold}: FP-rate ${(cf.fp_rate*100||0).toFixed(0)}% · `
+    + `precision ${(cf.precision||0).toFixed(2)} · recall ${(cf.recall||0).toFixed(2)}</small><br>`
+    + `<small class="tag">${esc((r.suggestion||{}).rationale||"")}</small>`
+    + (imp ? `<br><small class="bd-shadow">independence flip: ${imp.entities_changed}/${imp.entities} entities would change (mean Δ ${imp.mean_abs_delta})</small>` : "")
+    + `</div>`
+    + `<table><thead><tr><th>bin</th><th>n</th><th>pred</th><th>empirical</th><th></th></tr></thead><tbody>${bins}</tbody></table>`;
 }
 
 async function loadRuleCatalogue(){

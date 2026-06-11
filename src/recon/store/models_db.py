@@ -225,6 +225,23 @@ class ArtifactEdge(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class CalibrationRun(Base):
+    """One execution of `recon calibrate`: the calibration metrics of the verify
+    engine against ground-truth labels at a point in time (Phase 5c)."""
+
+    __tablename__ = "calibration_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    n: Mapped[int] = mapped_column(Integer, default=0)
+    positives: Mapped[int] = mapped_column(Integer, default=0)
+    negatives: Mapped[int] = mapped_column(Integer, default=0)
+    brier: Mapped[float] = mapped_column(Float, default=0.0)
+    ece: Mapped[float] = mapped_column(Float, default=0.0)
+    found_threshold: Mapped[float] = mapped_column(Float, default=0.0)
+    report: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
 class RuleFinding(Base):
     """An insight: a declarative correlation rule that fired on a run's
     discovery graph (Phase 4). Distinct from `Entity` (identity cluster) and

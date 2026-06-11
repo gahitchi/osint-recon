@@ -32,7 +32,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.6.1")
+app = FastAPI(title="osint-recon", version="0.7.0")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -180,6 +180,22 @@ async def api_rules() -> JSONResponse:
     """The correlation-rule catalogue (built-ins + any RECON_RULES_FILE)."""
     from .rules import rule_catalogue
     return JSONResponse(rule_catalogue())
+
+
+@app.get("/api/calibration")
+async def api_calibration() -> JSONResponse:
+    """Calibration history: is the confidence score calibrated? (Phase 5c) The
+    latest report plus a lightweight history of prior runs."""
+    with get_db().session() as s:
+        rows = repo.list_calibration(s, limit=20)
+        history = [
+            {**_row(r, ("id", "n", "positives", "negatives", "brier", "ece",
+                        "found_threshold")),
+             "created_at": r.created_at.isoformat()}
+            for r in rows
+        ]
+        latest = rows[0].report if rows else None
+        return JSONResponse({"latest": latest, "history": history})
 
 
 @app.get("/api/sources")

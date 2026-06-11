@@ -252,6 +252,45 @@ def _cmd_provenance(args) -> int:
     return 0
 
 
+async def _cmd_calibrate(args) -> int:
+    """Run calibration over ground-truth labels and report (never auto-tunes)."""
+    from .calibrate import independence_impact, run_calibration
+    from .store import get_db, repo
+
+    report = await run_calibration(n_bins=args.bins)
+    if report["n"] == 0:
+        print("no calibration samples — add labels in data/calibration_labels.json "
+              "(or RECON_CALIBRATION_FILE), and ensure the sites are reachable.",
+              file=sys.stderr)
+        return 0
+
+    print(f"Calibration over {report['n']} sample(s) "
+          f"({report['positives']} present / {report['negatives']} absent)")
+    print(f"  Brier {report['brier']}   ECE {report['ece']}   MCE {report['mce']}")
+    print("  reliability (predicted -> empirical present):")
+    for b in report["bins"]:
+        if not b["count"]:
+            continue
+        bar = "#" * int(round(b["empirical"] * 20))
+        print(f"   [{b['lo']:.1f}-{b['hi']:.1f}] n={b['count']:<3} "
+              f"pred {b['mean_pred']:.2f}  emp {b['empirical']:.2f}  {bar}")
+    cf = report["confusion_found"]
+    print(f"  at FOUND>={report['found_threshold']}: FP-rate {cf['fp_rate']:.0%} "
+          f"(tp{cf['tp']} fp{cf['fp']} tn{cf['tn']} fn{cf['fn']})")
+    print(f"  suggestion: {report['suggestion']['rationale']}")
+
+    db = get_db()
+    imp = independence_impact(db)
+    report["independence_impact"] = imp
+    print(f"  independence flip: {imp['entities_changed']}/{imp['entities']} stored "
+          f"entities would change (mean delta {imp['mean_abs_delta']}); flip "
+          "`confidence_independence` once verify calibration is healthy.")
+    with db.session() as s:
+        row = repo.save_calibration(s, report)
+    print(f"  saved calibration #{row.id}", file=sys.stderr)
+    return 0
+
+
 # --- main ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -287,6 +326,10 @@ def build_parser() -> argparse.ArgumentParser:
     prov = sub.add_parser("provenance", help="print the reproducibility stamp of a run")
     prov.add_argument("--run", type=int, help="run id (defaults to the latest run)")
 
+    cal = sub.add_parser("calibrate",
+                         help="measure whether the confidence score is calibrated (vs labels)")
+    cal.add_argument("--bins", type=int, default=10, help="reliability-diagram bins")
+
     sub.add_parser("serve", help="launch the local web dashboard + API")
     wk = sub.add_parser("worker", help="process queued scan jobs")
     wk.add_argument("--once", action="store_true", help="drain the queue then exit")
@@ -317,6 +360,8 @@ def main() -> None:
         raise SystemExit(_cmd_insights(args))
     if cmd == "provenance":
         raise SystemExit(_cmd_provenance(args))
+    if cmd == "calibrate":
+        raise SystemExit(asyncio.run(_cmd_calibrate(args)))
     if cmd == "serve":
         from .server import main as serve_main
         serve_main()
