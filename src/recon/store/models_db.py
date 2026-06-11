@@ -219,3 +219,23 @@ class ArtifactEdge(Base):
     dst_artifact_id: Mapped[int] = mapped_column(ForeignKey("artifacts.id"), index=True)
     module: Mapped[str] = mapped_column(String(60))
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class RuleFinding(Base):
+    """An insight: a declarative correlation rule that fired on a run's
+    discovery graph (Phase 4). Distinct from `Entity` (identity cluster) and
+    `ArtifactNode` (raw discovery) — this is the *interpreted* signal."""
+
+    __tablename__ = "rule_findings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("targets.id"), index=True)
+    rule_id: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(10), index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    key: Mapped[str] = mapped_column(String(400), default="")
+    evidence: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)

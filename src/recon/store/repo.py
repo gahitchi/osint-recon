@@ -217,3 +217,20 @@ def list_artifact_edges(s: Session, run_id: int) -> list[m.ArtifactEdge]:
     return list(s.execute(
         select(m.ArtifactEdge).where(m.ArtifactEdge.run_id == run_id)
     ).scalars().all())
+
+
+def persist_rule_findings(s: Session, run: m.Run, hits: list) -> None:
+    """Persist fired correlation rules (rules.RuleHit) for a run."""
+    for h in hits:
+        s.add(m.RuleFinding(
+            run_id=run.id, target_id=run.target_id, rule_id=h.rule_id,
+            title=h.title, severity=h.severity, description=h.description,
+            key=h.key[:400], evidence=list(h.evidence), detail=dict(h.detail),
+        ))
+
+
+def list_rule_findings(s: Session, run_id: int) -> list[m.RuleFinding]:
+    return list(s.execute(
+        select(m.RuleFinding).where(m.RuleFinding.run_id == run_id)
+        .order_by(m.RuleFinding.id)
+    ).scalars().all())

@@ -12,6 +12,7 @@ document.querySelectorAll("#tabs button").forEach((b) => {
     if (b.dataset.tab === "investigations") { loadTargets(); loadRuns(); }
     if (b.dataset.tab === "timeline") loadChanges();
     if (b.dataset.tab === "sources") loadSources();
+    if (b.dataset.tab === "insights") { loadInsights(); loadRuleCatalogue(); }
     if (b.dataset.tab === "keys") { loadKeys(); loadModules(); }
   });
 });
@@ -260,6 +261,41 @@ async function loadKeys(){
     saveKey(b.dataset.key, document.querySelector(`input[data-key="${b.dataset.key}"]`).value));
   document.querySelectorAll(".clearkey").forEach(b=>b.onclick=()=>saveKey(b.dataset.key, ""));
 }
+// --- Insights (correlation-rule findings) ----------------------------------
+const SEV_CLASS = { high:"FOUND", medium:"UNCERTAIN", low:"UNVERIFIABLE", info:"NOT_FOUND" };
+const sevBadge = (s) => `<span class="v ${SEV_CLASS[s]||"NOT_FOUND"}">${esc(s)}</span>`;
+
+async function loadInsights(){
+  let run = $("#ins-run").value.trim();
+  if (!run) {
+    const runs = await (await fetch("/api/runs")).json();
+    if (!runs.length) { $("#ins-status").textContent = "No runs yet — run a saved scan first."; $("#insights").innerHTML=""; return; }
+    run = runs[0].id;
+  }
+  const d = await (await fetch(`/api/runs/${run}/rules`)).json();
+  const items = d.insights || [];
+  $("#ins-status").textContent = `run #${d.run_id}: ${items.length} insight(s)`;
+  if (!items.length) { $("#insights").innerHTML = "<p class='tag'>No correlation rules fired for this run.</p>"; return; }
+  $("#insights").innerHTML = items.map(h => {
+    const ev = (h.evidence||[]).slice(0,8)
+      .map(e=>`<span class="leg"><i style="background:${typeColor(e.type)}"></i>${esc(e.type)}: ${esc(e.value)}</span>`).join("");
+    const key = (h.key && h.key !== "*") ? ` <small class="tag">· ${esc(h.key)}</small>` : "";
+    return `<div class="cluster">${sevBadge(h.severity)} <b>${esc(h.title)}</b>${key}`+
+           `<br><small>${esc(h.description)}</small>`+
+           (ev ? `<div class="map-legend">${ev}</div>` : "")+`</div>`;
+  }).join("");
+}
+
+async function loadRuleCatalogue(){
+  const rules = await (await fetch("/api/rules")).json();
+  let h = `<table><thead><tr><th>Severity</th><th>Rule</th><th>Kind</th><th>What it means</th></tr></thead><tbody>`;
+  for (const r of rules)
+    h += `<tr><td>${sevBadge(r.severity)}</td><td><b>${esc(r.title)}</b><br><small class="tag">${esc(r.id)}</small></td>`+
+         `<td><span class="badge">${esc(r.kind)}</span></td><td><small>${esc(r.description)}</small></td></tr>`;
+  $("#rulecat").innerHTML = h + "</tbody></table>";
+}
+$("#ins-load").addEventListener("click", loadInsights);
+
 async function saveKey(name, value){
   const st = $("#keys-status");
   if (st) st.textContent = value ? `Saving ${name}…` : `Clearing ${name}…`;

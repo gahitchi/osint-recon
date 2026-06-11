@@ -51,7 +51,7 @@ only.**
 | **Probabilistic correlation + identity graph**: blocking → Fellegi–Sunter-style weighted matching (Jaro-Winkler names) → MERGE/REVIEW/DISTINCT, with coherence/contradiction checks and confidence propagation | `src/recon/correlate/` |
 | **Long-term monitoring**: cron **scheduler** + run-over-run **change detection** (appeared/disappeared/changed via content fingerprint) | `src/recon/monitor/` |
 | **Scalability**: scans become **durable jobs**; in-process worker pool by default, optional Redis/arq workers + cross-process rate limiting | `src/recon/jobs/`, `ratelimit.py` |
-| **Dashboard + API**: investigations, timeline, identity graph, **interactive discovery map**, source-health, and **modules/keys** tabs | `src/recon/server.py`, `web/` |
+| **Dashboard + API**: investigations, timeline, identity graph, **interactive discovery map**, **insights**, source-health, and **modules/keys** tabs | `src/recon/server.py`, `web/` |
 
 These directly address the prior limitations: immature correlation, hard
 dependence on live APIs/scrapers, limited scalability, and source-driven output
@@ -122,6 +122,37 @@ the browser** — no new dependencies, no CDN, no build step.
 ```bash
 recon serve     # open http://127.0.0.1:8000 → Discovery map · Modules & keys tabs
 ```
+
+## What's new in v0.5 — the correlation-rules engine
+
+The recursive engine *finds* things; v0.5 *interprets* them. A **declarative
+correlation-rules engine** fires on a run's artifact graph and turns raw
+discovery into **insights** — the cross-platform links and exposure signals an
+analyst actually cares about. This is the layer SpiderFoot lacks: it has the
+events, but you're left to eyeball them.
+
+Rules are **data, not code** (`src/recon/rules/`), so new insights are a dict —
+add your own via `RECON_RULES_FILE` (JSON), overriding built-ins by `id`.
+
+| Rule kind | Fires when | Example built-in |
+|---|---|---|
+| `threshold` | ≥N artifacts match a clause | **email-in-breach**, **broad-subdomain-footprint**, **multi-network-infra** |
+| `co_occurrence` | every clause matches, tied by a shared derived key | **handle-reuse-breached** (a username and a breached email folding to the same handle) |
+| `shared` | one type, grouped, spanning ≥N distinct parents/platforms | **avatar-reuse** (one Gravatar across ≥2 accounts), **handle-across-platforms** |
+
+A clause can filter on any artifact field (`type`/`value`/`depth`/`data.*`) with
+ops (`eq/in/gte/contains/present/absent`). The `shared` kind is **edge-aware** —
+it counts distinct *incoming provenance*, so a single deduped node (e.g. an
+avatar hash reached from two emails) still registers as cross-account reuse.
+
+```bash
+recon scan --username torvalds        # insights print under the findings
+recon insights --run 1                # the rules that fired, with evidence
+recon serve                           # dashboard "Insights" tab + rule catalogue
+```
+
+Insights are persisted (`rule_findings`) and served at
+`GET /api/runs/{id}/rules`; the catalogue is `GET /api/rules`.
 
 ## What it does
 

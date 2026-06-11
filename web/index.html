@@ -18,6 +18,7 @@
     <button data-tab="timeline">Timeline</button>
     <button data-tab="graph">Identity graph</button>
     <button data-tab="map">Discovery map</button>
+    <button data-tab="insights">Insights</button>
     <button data-tab="sources">Source health</button>
     <button data-tab="keys">Modules &amp; keys</button>
   </nav>
@@ -90,6 +91,22 @@
       <canvas id="map-canvas"></canvas>
       <div id="map-detail" class="map-detail"></div>
     </div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section class="panel" id="panel-insights">
+    <h2>Insights</h2>
+    <p class="tag">Declarative correlation rules fired on a run's discovery graph —
+    avatar reuse, reused handle + breached email, broad footprints. Rules are data
+    (built-ins + <code>RECON_RULES_FILE</code>); see the catalogue below.</p>
+    <div class="maprow">
+      <label>Run id <input id="ins-run" type="number" style="width:90px" placeholder="latest" /></label>
+      <button id="ins-load">Load</button>
+      <span id="ins-status" class="tag"></span>
+    </div>
+    <div id="insights"></div>
+    <h2>Rule catalogue</h2>
+    <div id="rulecat"></div>
   </section>
 
   <!-- SOURCES -->

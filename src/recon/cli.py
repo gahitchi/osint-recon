@@ -85,6 +85,13 @@ async def _cmd_scan(args) -> int:
         for ch in result["changes"]:
             print(f"  {ch['kind']:<11} {ch['source']} {ch['label']}", file=sys.stderr)
 
+    insights = result.get("insights", [])
+    if insights:
+        print("\nInsights (correlation rules fired):", file=sys.stderr)
+        for h in insights:
+            print(f"  [{h.severity:<6}] {h.title}"
+                  f"{(' — ' + h.key) if h.key not in ('*', '') else ''}", file=sys.stderr)
+
     stop = f"  (stopped: {result['stop_reason']})" if result.get("stop_reason") else ""
     print(f"\nrun #{result['run_id']} — {sum(1 for f in findings if f.is_hit)} hit(s) "
           f"of {len(findings)} checks; {len(result.get('artifacts', []))} artifact(s) "
@@ -182,6 +189,36 @@ def _cmd_graph(args) -> int:
     return 0
 
 
+def _cmd_insights(args) -> int:
+    """Print the correlation-rule insights that fired on a run's graph."""
+    from .store import get_db, repo
+
+    db = get_db()
+    with db.session() as s:
+        run_id = args.run
+        if run_id is None:
+            runs = repo.list_runs(s, limit=1)
+            if not runs:
+                print("no runs yet", file=sys.stderr)
+                return 1
+            run_id = runs[0].id
+        rows = repo.list_rule_findings(s, run_id)
+        items = [(r.severity, r.title, r.key, list(r.evidence)) for r in rows]
+
+    if not items:
+        print(f"run #{run_id}: no insights — no correlation rules fired")
+        return 0
+    rank = {"high": 3, "medium": 2, "low": 1, "info": 0}
+    items.sort(key=lambda t: -rank.get(t[0], 0))
+    print(f"run #{run_id} — {len(items)} insight(s):")
+    for sev, title, key, evidence in items:
+        tail = f"  ({key})" if key not in ("*", "") else ""
+        print(f"  [{sev:<6}] {title}{tail}")
+        for e in evidence[:4]:
+            print(f"            ↳ {e.get('type')}: {e.get('value')}")
+    return 0
+
+
 # --- main ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -209,6 +246,9 @@ def build_parser() -> argparse.ArgumentParser:
     gr = sub.add_parser("graph", help="print the discovery graph (artifact tree) of a run")
     gr.add_argument("--run", type=int, help="run id (defaults to the latest run)")
 
+    ins = sub.add_parser("insights", help="print correlation-rule insights that fired on a run")
+    ins.add_argument("--run", type=int, help="run id (defaults to the latest run)")
+
     sub.add_parser("serve", help="launch the local web dashboard + API")
     wk = sub.add_parser("worker", help="process queued scan jobs")
     wk.add_argument("--once", action="store_true", help="drain the queue then exit")
@@ -235,6 +275,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(_cmd_scan(args)))
     if cmd == "graph":
         raise SystemExit(_cmd_graph(args))
+    if cmd == "insights":
+        raise SystemExit(_cmd_insights(args))
     if cmd == "serve":
         from .server import main as serve_main
         serve_main()

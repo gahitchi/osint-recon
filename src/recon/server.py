@@ -32,7 +32,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.4.0")
+app = FastAPI(title="osint-recon", version="0.5.0")
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:
@@ -144,6 +144,29 @@ async def api_run_graph(run_id: int) -> JSONResponse:
                  "module": e.module} for e in edges
             ],
         })
+
+
+@app.get("/api/runs/{run_id}/rules")
+async def api_run_rules(run_id: int) -> JSONResponse:
+    """Insights: the declarative correlation rules that fired on this run's
+    discovery graph (Phase 4), most-severe first."""
+    sev = {"high": 3, "medium": 2, "low": 1, "info": 0}
+    with get_db().session() as s:
+        rows = repo.list_rule_findings(s, run_id)
+        items = [
+            {**_row(r, ("rule_id", "title", "severity", "description", "key")),
+             "evidence": r.evidence, "detail": r.detail}
+            for r in rows
+        ]
+    items.sort(key=lambda d: -sev.get(d["severity"], 0))
+    return JSONResponse({"run_id": run_id, "insights": items})
+
+
+@app.get("/api/rules")
+async def api_rules() -> JSONResponse:
+    """The correlation-rule catalogue (built-ins + any RECON_RULES_FILE)."""
+    from .rules import rule_catalogue
+    return JSONResponse(rule_catalogue())
 
 
 @app.get("/api/sources")

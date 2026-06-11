@@ -49,6 +49,7 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
     """
     from .correlate.graph import correlate_run
     from .monitor.diff import diff_run
+    from .rules import evaluate, load_rules
     from .store import get_db, repo
 
     db = get_db()
@@ -70,6 +71,9 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
         if ev["type"] == "finding":
             findings.append(Finding(**ev["finding"]))
 
+    # Declarative correlation rules fire on the discovery graph (Phase 4).
+    insights = evaluate(engine.artifacts, engine.edges, load_rules())
+
     def _persist():
         with db.session() as s:
             run = s.get(repo.m.Run, run_id)
@@ -77,10 +81,12 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
                 repo.add_observation(s, run, f,
                                      reliability=float(f.data.get("source_reliability", 0.5)))
             repo.persist_graph(s, run, engine.artifacts, engine.edges)
+            repo.persist_rule_findings(s, run, insights)
             repo.finish_run(s, run, "done", {
                 "total": len(findings),
                 "hits": sum(1 for f in findings if f.is_hit),
                 "artifacts": len(engine.artifacts),
+                "insights": len(insights),
                 "stop_reason": engine.stop_reason,
             })
         # Correlate + diff in their own transactions.
@@ -97,5 +103,6 @@ async def scan(query: Query, *, label: str | None = None, watchlist: bool = Fals
         "changes": changes,
         "artifacts": engine.artifacts,
         "edges": engine.edges,
+        "insights": insights,
         "stop_reason": engine.stop_reason,
     }
