@@ -24,6 +24,8 @@ htmlcov/
 
 # Local databases (investigation data — keep out of git)
 *.db
+*.db-wal
+*.db-shm
 /data/*.db
 
 # Fetched WhatsMyName dataset (opt-in via scripts/fetch_wmn.py; CC BY 4.0, large)

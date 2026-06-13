@@ -365,9 +365,12 @@ def build_parser() -> argparse.ArgumentParser:
     wk.add_argument("--once", action="store_true", help="drain the queue then exit")
     sub.add_parser("monitor", help="run the cron scheduler for watch-listed targets")
 
-    ls = sub.add_parser("targets"); ls.add_argument("--target", type=int)
-    rn = sub.add_parser("runs"); rn.add_argument("--target", type=int)
-    chg = sub.add_parser("changes"); chg.add_argument("--target", type=int)
+    ls = sub.add_parser("targets")
+    ls.add_argument("--target", type=int)
+    rn = sub.add_parser("runs")
+    rn.add_argument("--target", type=int)
+    chg = sub.add_parser("changes")
+    chg.add_argument("--target", type=int)
     sub.add_parser("sources")
     return p
 

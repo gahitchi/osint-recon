@@ -83,6 +83,20 @@ class Database:
         finally:
             s.close()
 
+    def close(self) -> None:
+        """Dispose the engine's connection pool, closing pooled DBAPI handles.
+
+        Without this, an abandoned Database leaks its SQLite connections until
+        the interpreter's GC reclaims them (surfacing as ResourceWarning under
+        warnings-as-errors). Idempotent and safe to call more than once."""
+        self.engine.dispose()
+
+    def __enter__(self) -> "Database":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
 
 def _default_dsn() -> str:
     dsn = os.environ.get("RECON_DB_DSN") or SETTINGS.storage_dsn
@@ -108,6 +122,8 @@ def get_db() -> Database:
 def init_db(dsn: str | None = None) -> Database:
     """(Re)initialize the global database and create tables. Used by CLI/tests."""
     global _DB
+    if _DB is not None:
+        _DB.close()  # release the previous engine's pooled connections
     _DB = Database(dsn or _default_dsn())
     _DB.create_all()
     return _DB

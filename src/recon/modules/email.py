@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from ..collectors import email as _email
 from ..graph_models import Artifact, ArtifactType
-from ..models import Finding, Query, Verdict
+from ..models import Finding, Query
 from .base import Module, ModuleContext
 
 

@@ -11,4 +11,5 @@ def fresh_db(tmp_path, monkeypatch):
     monkeypatch.setenv("RECON_DB_DSN", dsn)
     database = db_mod.init_db(dsn)  # creates tables, sets global
     yield database
+    database.close()  # dispose the engine pool so no SQLite handle leaks
     db_mod._DB = None

@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .config import SETTINGS
 from .keys import KNOWN_KEYS, VAULT
 from .models import Query
@@ -32,7 +33,7 @@ def _modules_for_key(name: str) -> list[str]:
 ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 
-app = FastAPI(title="osint-recon", version="0.7.1")
+app = FastAPI(title="osint-recon", version=__version__)
 
 
 def _row(obj: Any, fields: tuple[str, ...]) -> dict:

@@ -7,7 +7,7 @@ from recon import engine as engine_mod
 from recon.engine import GraphScanEngine
 from recon.graph_models import Artifact, ArtifactType
 from recon.models import Finding, Query, Verdict
-from recon.modules.base import Module, ModuleContext
+from recon.modules.base import Module
 
 
 def _fake_registry(monkeypatch, calls):

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import enum
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel, Field
 
 from .explain import ScoreBreakdown
+
+if TYPE_CHECKING:
+    from .graph_models import Artifact
 
 
 class Verdict(str, enum.Enum):
@@ -48,7 +51,7 @@ class Query(BaseModel):
             (self.username, self.email, self.phone, self.domain, self.name)
         )
 
-    def to_seed_artifacts(self) -> list["Artifact"]:
+    def to_seed_artifacts(self) -> list[Artifact]:
         """Map each provided identifier to a depth-0 seed Artifact for the engine."""
         from .graph_models import Artifact, ArtifactType
 

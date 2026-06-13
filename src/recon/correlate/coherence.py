@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import jellyfish
 
-from ..config import SETTINGS
 from .resolver import STRONG, Record
 
 

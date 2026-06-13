@@ -353,11 +353,29 @@ identifying User-Agent. Auth-walled platforms (Instagram, Discord, Facebook,
 X/Twitter, LinkedIn, Snapchat) are excluded by default. You are responsible for
 complying with applicable law and each site's terms.
 
-## Tests
+## Tests & quality
 
 ```bash
-pytest -q
+pytest -q          # 124 tests; coverage prints automatically (--cov is wired in)
+ruff check         # lint gate: pyflakes (dead code / undefined names) + pycodestyle
 ```
 
 The acceptance gate is `tests/test_verify_verdict.py`: soft-404s (200 + generic
 not-found body) must resolve to `NOT_FOUND`, genuine profiles to `FOUND`.
+
+The suite treats `ResourceWarning` as an **error** (`filterwarnings` in
+`pyproject.toml`), so a leaked SQLite handle fails CI rather than passing
+silently — `Database.close()` disposes the engine pool and the test fixture and
+`init_db` call it. `requirements.lock` pins the exact, tested dependency set
+(regenerate with `pip freeze --exclude-editable`).
+
+## What's new in v0.7.2 — hardening pass
+
+No new features — a correctness/quality sweep over the shipped v0.7.x framework:
+
+| Hardened | What |
+| --- | --- |
+| **No leaked DB handles** | `Database.close()`/context-manager dispose the engine pool; `init_db` releases the prior global DB; tests gate `ResourceWarning` as an error (was 200+ unclosed-connection warnings). |
+| **Lint gate** | `ruff` (pyflakes + pycodestyle) added to `[dev]` and run clean — removed dead imports, fixed a forward-ref annotation, split multi-statement lines. |
+| **Coverage + tests** | `pytest-cov` wired into `pyproject.toml`; added real behavioural tests for the keyed intel modules (Shodan / VirusTotal / AbuseIPDB / ip-api — proving they are genuine integrations, not stubs) and the report serialisers. 107 → 124 tests. |
+| **Reproducible env** | `requirements.lock` regenerated from the verified venv; `.gitignore` now also excludes SQLite `-wal`/`-shm` sidecars. |
