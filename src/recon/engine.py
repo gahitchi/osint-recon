@@ -43,6 +43,31 @@ _HOST_TYPES = {
     ArtifactType.MX_HOST, ArtifactType.NAMESERVER,
 }
 
+# Frontier priority: when a request budget may cut a wave short, expand the
+# highest-yield leads first. Identifiers that tie identities together (email,
+# account profile, domain, username) are worth more than terminal/network
+# breadcrumbs (an IP geo lookup rarely unlocks a new identity). Ties break on
+# the artifact's own confidence, then on shallower depth (closer to the seed).
+_TYPE_PRIORITY = {
+    ArtifactType.EMAIL: 100,
+    ArtifactType.ACCOUNT_PROFILE: 90,
+    ArtifactType.DOMAIN: 80,
+    ArtifactType.USERNAME: 75,
+    ArtifactType.SUBDOMAIN: 60,
+    ArtifactType.HOSTNAME: 55,
+    ArtifactType.MX_HOST: 50,
+    ArtifactType.NAMESERVER: 45,
+    ArtifactType.URL: 40,
+    ArtifactType.LINK: 38,
+    ArtifactType.IP_ADDRESS: 35,
+    ArtifactType.NETBLOCK: 30,
+    ArtifactType.ASN: 28,
+    ArtifactType.BREACH: 25,
+    ArtifactType.HASH: 20,
+    ArtifactType.PHONE: 15,
+    ArtifactType.NAME: 10,
+}
+
 
 @dataclass
 class ScopePolicy:
@@ -115,7 +140,12 @@ class GraphScanEngine:
         self.stop_reason: Optional[str] = None
         # Traversal state.
         self._seen: set[str] = set()
-        self._requests = 0
+
+    @staticmethod
+    def _priority(art: Artifact) -> tuple:
+        """Best-first ordering key (higher sorts first): identity-bearing types,
+        then the artifact's confidence, then shallower depth."""
+        return (_TYPE_PRIORITY.get(art.type, 0), art.confidence, -art.depth)
 
     def _admit_node(self, art: Artifact) -> bool:
         """Record an artifact as a graph node (deduped, budgeted). Returns True
@@ -176,24 +206,39 @@ class GraphScanEngine:
                 for seed in self.query.to_seed_artifacts():
                     if self._admit_node(seed):
                         frontier.append(seed)
+                frontier.sort(key=self._priority, reverse=True)
 
+                batch_size = max(1, self.settings.max_concurrency)
                 while frontier:
-                    if self._requests >= self.settings.max_requests:
+                    if client.request_count >= self.settings.max_requests:
                         self.stop_reason = self.stop_reason or "max_requests reached"
                         break
                     state["next"] = []
-                    tasks = []
-                    for art in frontier:
-                        for mod in applicable_modules(art):
-                            if not self._module_enabled(mod):
-                                continue
-                            if self._requests >= self.settings.max_requests:
-                                self.stop_reason = self.stop_reason or "max_requests reached"
-                                break
-                            self._requests += 1
-                            tasks.append(mod.run_resilient(art, ctx))
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    frontier = state["next"]
+                    # Flatten the (best-first) frontier into ordered dispatches so
+                    # the budget can cut in mid-wave: high-yield leads are expanded
+                    # before low-value breadcrumbs when requests run short.
+                    dispatches = [
+                        (art, mod)
+                        for art in frontier
+                        for mod in applicable_modules(art)
+                        if self._module_enabled(mod)
+                    ]
+                    stopped = False
+                    for i in range(0, len(dispatches), batch_size):
+                        # Real-request budget, checked between batches (a single
+                        # fan-out module can still overshoot within its own batch).
+                        if client.request_count >= self.settings.max_requests:
+                            self.stop_reason = self.stop_reason or "max_requests reached"
+                            stopped = True
+                            break
+                        batch = dispatches[i:i + batch_size]
+                        await asyncio.gather(
+                            *(mod.run_resilient(art, ctx) for art, mod in batch),
+                            return_exceptions=True,
+                        )
+                    if stopped:
+                        break
+                    frontier = sorted(state["next"], key=self._priority, reverse=True)
             await queue.put(None)  # sentinel
 
         task = asyncio.create_task(worker())

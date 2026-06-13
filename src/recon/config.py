@@ -62,7 +62,7 @@ class Settings:
     # as any ceiling is hit and reports the stop reason (never runs away).
     max_depth: int = 3            # how many pivots deep the frontier may grow
     max_artifacts: int = 500      # total distinct artifacts admitted to the graph
-    max_requests: int = 2000      # total module dispatches (a rough request budget)
+    max_requests: int = 2000      # total real outbound requests (enforced per wave)
     # strict  = only expand artifacts that chain back to a seed (subdomains/IPs of
     #           seed domains, handle pivots of seed identities); external domains
     #           discovered via links are recorded but not expanded.

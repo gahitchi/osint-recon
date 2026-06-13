@@ -27,6 +27,10 @@ class RateLimitedClient:
         self._robots: dict[str, Optional[robotparser.RobotFileParser]] = {}
         # Optional cross-process limiter (e.g. Redis) for the distributed path.
         self._limiter = limiter
+        # Count of real outbound requests, so the engine can enforce a budget
+        # against actual traffic rather than module dispatches (one dispatch of
+        # the username module can fan out to hundreds of site checks).
+        self.request_count = 0
 
     async def __aenter__(self) -> "RateLimitedClient":
         self._client = httpx.AsyncClient(
@@ -89,5 +93,6 @@ class RateLimitedClient:
             # Cross-process politeness (no-op unless a distributed limiter is set).
             if self._limiter is not None:
                 await self._limiter.acquire(host)
+            self.request_count += 1
             resp = await self._client.request(method, url)
             return resp
