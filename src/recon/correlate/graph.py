@@ -14,6 +14,7 @@ from sqlalchemy import delete, select
 
 from ..store import models_db as m
 from ..store import repo
+from ..trust import corroboration
 from . import coherence, confidence
 from .blocking import candidate_pairs
 from .cluster import _UF
@@ -143,6 +144,8 @@ def correlate_run(db, run_id: int) -> dict:
                 "breakdown": bd.model_dump(),
                 "signals": attrs,
                 "flags": flags,
+                "corroboration": corroboration([o.source for o in cl_obs
+                                                if o.verdict == "FOUND"]),
                 "found": sum(1 for o in cl_obs if o.verdict == "FOUND"),
                 "uncertain": sum(1 for o in cl_obs if o.verdict == "UNCERTAIN"),
                 "sources": sorted({o.source for o in cl_obs}),

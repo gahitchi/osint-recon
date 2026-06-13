@@ -109,7 +109,15 @@ function renderSummary(s) {
   for (const c of s.clusters) {
     const sig = Object.entries(c.signals || {}).map(([k, v]) => `${k}: ${[].concat(v).join(", ")}`).join(" · ") || "—";
     const flags = (c.flags && c.flags.length) ? `<span class="flag">${c.flags.join(", ")}</span>` : "";
-    html += `<div class="cluster"><b>#${c.id} ${esc(c.label||"")}</b> · score ${c.score} · ${c.found} found / ${c.uncertain} uncertain ${flags}<br><small>${esc(sig)}</small></div>`;
+    const co = c.corroboration;
+    let corro = "";
+    if (co) {
+      const title = co.redundant && co.redundant.length ? ` title="redundant: ${esc(co.redundant.join(", "))}"` : "";
+      const inflated = co.inflation > 1 ? ` · ${co.inflation}× inflated` : "";
+      const cls = co.label === "corroborated" ? "corro-ok" : "corro-weak";
+      corro = `<span class="corro ${cls}"${title}>${co.label} · ${co.independent_classes} indep.${inflated}</span>`;
+    }
+    html += `<div class="cluster"><b>#${c.id} ${esc(c.label||"")}</b> · score ${c.score} · ${c.found} found / ${c.uncertain} uncertain ${flags} ${corro}<br><small>${esc(sig)}</small></div>`;
   }
   $("#summary").innerHTML = html;
 }

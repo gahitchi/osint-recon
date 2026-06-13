@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "osint-recon"
-version = "0.7.2"
+version = "0.8.0"
 description = "Local-first, professional-grade OSINT investigation framework: event-driven recursive collection, low-false-positive verification, probabilistic correlation, and long-term monitoring."
 readme = "README.md"
 requires-python = ">=3.10"

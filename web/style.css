@@ -39,6 +39,9 @@ footer { margin-top:30px; color:var(--mut); }
 .panel.active { display:block; }
 #save { background:#1f6feb; margin-left:8px; }
 .flag { color:var(--error); font-size:11px; border:1px solid var(--error); border-radius:8px; padding:1px 6px; margin-left:6px; }
+.corro { font-size:11px; border-radius:8px; padding:1px 6px; margin-left:6px; border:1px solid var(--line); }
+.corro-ok { color:var(--found); border-color:var(--found); }
+.corro-weak { color:var(--uncertain); border-color:var(--uncertain); }
 .badge { font-size:11px; padding:1px 7px; border-radius:8px; background:#1b1f27; color:var(--mut); }
 .badge.appeared, .badge.closed { color:var(--found); }
 .badge.disappeared, .badge.open { color:var(--error); }

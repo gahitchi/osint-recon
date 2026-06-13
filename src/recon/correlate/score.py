@@ -8,6 +8,7 @@ alongside per-finding verdicts (it does not override them).
 from __future__ import annotations
 
 from ..models import Verdict
+from ..trust import corroboration as trust_corroboration
 from ..trust import independent_classes
 from .cluster import Identity
 
@@ -38,6 +39,16 @@ def score_identity_shadow(identity: Identity) -> float:
     return _score(identity, by_class=True)
 
 
+def corroboration(identity: Identity) -> dict:
+    """Trustworthiness of an identity's corroboration, surfaced live so an analyst
+    can see whether a confident score rests on genuinely independent confirmation
+    or on several sources that collapse to one independence class. Purely
+    explanatory — it does not alter the official `score`. See
+    `trust.corroboration` for the shared assessment."""
+    found_sources = [f.source for f in identity.findings if f.verdict == Verdict.FOUND]
+    return trust_corroboration(found_sources)
+
+
 def summarize(identities: list[Identity]) -> dict:
     return {
         "identities": len(identities),
@@ -46,6 +57,7 @@ def summarize(identities: list[Identity]) -> dict:
                 "id": idn.id,
                 "score": score_identity(idn),
                 "confidence_shadow": score_identity_shadow(idn),
+                "corroboration": corroboration(idn),
                 "signals": {k: sorted(v) for k, v in idn.signals.items()},
                 "found": sum(1 for f in idn.findings if f.verdict == Verdict.FOUND),
                 "uncertain": sum(1 for f in idn.findings if f.verdict == Verdict.UNCERTAIN),

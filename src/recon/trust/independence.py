@@ -94,6 +94,33 @@ def independent_classes(sources) -> tuple[set[str], list[tuple[str, str]]]:
     return classes, redundant
 
 
+def corroboration(found_sources) -> dict:
+    """Assess how *trustworthy* a set of corroborating FOUND sources is.
+
+    Reliability signal made explicit: `inflation` > 1 means distinct source
+    *names* outnumber independent *classes* — several sources that collapse to
+    one independence class look broader than they truly are. Purely descriptive;
+    it does not change any score, so no calibration gate is needed.
+    """
+    names = sorted(set(found_sources))
+    classes, redundant = independent_classes(names)
+    n_classes, n_names = len(classes), len(names)
+    if n_classes >= 2:
+        label = "corroborated"
+    elif n_classes == 1:
+        label = "single_source"
+    else:
+        label = "uncorroborated"
+    return {
+        "label": label,
+        "independent_classes": n_classes,
+        "distinct_sources": n_names,
+        "inflation": round(n_names / n_classes, 2) if n_classes else 0.0,
+        "classes": sorted(classes),
+        "redundant": [f"{s}->{c}" for s, c in redundant],
+    }
+
+
 def independence_breadth(sources, per: float = 0.08, cap: float = 0.25) -> float:
     """Breadth bonus from *independent* corroboration: scales with distinct
     classes, not source count. Mirrors the existing name-based formula's shape so

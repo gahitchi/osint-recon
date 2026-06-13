@@ -58,6 +58,8 @@ async def _cmd_scan(args) -> int:
     overrides: dict = {}
     if args.max_depth is not None:
         overrides["max_depth"] = args.max_depth
+    if getattr(args, "max_requests", None):
+        overrides["max_requests"] = args.max_requests
     if args.scope:
         overrides["scope_mode"] = args.scope
     if args.passive is not None:
@@ -83,8 +85,15 @@ async def _cmd_scan(args) -> int:
         print("\nIdentities (correlated):", file=sys.stderr)
         for c in summary["clusters"]:
             flag = f" [{','.join(c['flags'])}]" if c.get("flags") else ""
+            corro = c.get("corroboration") or {}
+            tag = ""
+            if corro:
+                tag = f" — {corro['label']} ({corro['independent_classes']} indep. class(es)"
+                if corro.get("inflation", 0) > 1:
+                    tag += f", {corro['inflation']}× inflated"
+                tag += ")"
             print(f"  #{c['id']} {c['label']}: score {c['score']} "
-                  f"({c['found']} found/{c['uncertain']} uncertain){flag}", file=sys.stderr)
+                  f"({c['found']} found/{c['uncertain']} uncertain){flag}{tag}", file=sys.stderr)
 
     if result["changes"]:
         print("\nChanges since last run:", file=sys.stderr)
@@ -337,6 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Recursive-engine controls (override config defaults for this run).
     sc.add_argument("--max-depth", type=int, dest="max_depth",
                     help="how many pivots deep the recursive engine may go")
+    sc.add_argument("--max-requests", type=int, dest="max_requests",
+                    help="ceiling on real outbound requests (spent best-first across the frontier)")
     sc.add_argument("--scope", choices=["strict", "aggressive"],
                     help="strict: only expand artifacts tied to the seed; aggressive: follow external pivots")
     pg = sc.add_mutually_exclusive_group()

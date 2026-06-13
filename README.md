@@ -369,6 +369,23 @@ silently — `Database.close()` disposes the engine pool and the test fixture an
 `init_db` call it. `requirements.lock` pins the exact, tested dependency set
 (regenerate with `pip freeze --exclude-editable`).
 
+## What's new in v0.8 — efficient & reliable clue search (Phase 6)
+
+Three improvements to the discovery engine itself: spend the request budget on
+the best leads, find more clues, and make corroboration trustworthy.
+
+| Area | What |
+| --- | --- |
+| **6a · Efficient traversal** | The request budget is now measured in *real outbound requests* (counted by the HTTP client), not module dispatches — one username dispatch fans out to 700+ site checks, so the old ceiling was meaningless. The frontier is expanded **best-first**: identity-bearing artifacts (email / profile / domain / username) outrank network breadcrumbs (IP / ASN / name), then confidence, then shallower depth. Each wave runs in priority-ordered batches and the budget is checked between them, so when requests run short the high-yield leads expand and low-value ones are skipped. |
+| **6b · Candidate-email pivot** (`modules/permute`) | `USERNAME`/`NAME` + a seed `DOMAIN` → candidate emails via common local-part patterns (`first.last`, `flast`, `handle@domain`, …). Each candidate is tested against a **deterministic** signal (Gravatar); only confirmed addresses are asserted `FOUND` and pivoted on. Unconfirmed candidates are surfaced once as a single `UNCERTAIN` lead and never recursed on — multiplying real clues without manufacturing false positives. No domain context → nothing generated. |
+| **6c · Visible corroboration** (`trust.corroboration`) | Every identity now reports *how trustworthy* its score is: how many genuinely **independent classes** confirm it vs. redundant sources inflating the count (`inflation` > 1 = looks broader than it is). Shown in `recon scan` output and the dashboard, on both summary paths. Purely descriptive — it explains the score without changing it, so no calibration gate is needed. |
+
+```bash
+recon scan --name "Jane Doe" --domain acme.com   # 6b: gravatar-verified jane.doe@acme.com
+recon scan --username torvalds                    # 6c: "corroborated (N indep. class(es))"
+recon scan --domain example.com --max-requests 50 # 6a: budget spent best-first
+```
+
 ## What's new in v0.7.2 — hardening pass
 
 No new features — a correctness/quality sweep over the shipped v0.7.x framework:
