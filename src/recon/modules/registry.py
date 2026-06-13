@@ -20,6 +20,7 @@ from . import (
     github,
     ip_geo,
     name,
+    permute,
     phone,
     profile_links,
     resolve,
@@ -50,6 +51,8 @@ MODULES: list[Module] = [
     # Phase 2 — identity pivots (keyless)
     github.MODULE,
     breach.MODULE,
+    # Phase 6b — candidate-email pivot (keyless)
+    permute.MODULE,
     # Phase 2 — keyed, optional (auto-skipped without vault keys)
     shodan.MODULE,
     virustotal.MODULE,
